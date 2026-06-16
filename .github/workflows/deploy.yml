@@ -40,6 +40,13 @@ jobs:
         working-directory: infra
         run: npm ci
 
+      - name: CDK bootstrap
+        working-directory: infra
+        run: npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
       - name: CDK deploy
         working-directory: infra
         run: npx cdk deploy --all --require-approval never
