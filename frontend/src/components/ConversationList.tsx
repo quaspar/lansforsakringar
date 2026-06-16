@@ -1,4 +1,3 @@
-import React from "react";
 import type { Conversation } from "../api/client";
 
 interface Props {
