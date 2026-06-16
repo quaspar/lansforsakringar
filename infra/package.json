@@ -1,0 +1,22 @@
+{
+  "name": "chat-infra",
+  "version": "0.1.0",
+  "bin": {
+    "chat-infra": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "synth": "npx cdk synth",
+    "deploy": "npx cdk deploy --all"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "aws-cdk": "2.149.0",
+    "typescript": "~5.5.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.149.0",
+    "constructs": "^10.0.0"
+  }
+}

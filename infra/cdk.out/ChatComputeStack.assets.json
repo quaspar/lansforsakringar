@@ -1,0 +1,34 @@
+{
+  "version": "36.0.0",
+  "files": {
+    "0610b381e8b2907d5687225c2c5cdebdb79a9ac5d617f1ccc42f9d8ec040ef14": {
+      "source": {
+        "path": "ChatComputeStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "123456789012-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-123456789012-us-east-1",
+          "objectKey": "0610b381e8b2907d5687225c2c5cdebdb79a9ac5d617f1ccc42f9d8ec040ef14.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::123456789012:role/cdk-hnb659fds-file-publishing-role-123456789012-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {
+    "07e0498aa32eb68575f2d3d5d05f09ec4edee168f590a627f7236fedb4c55648": {
+      "source": {
+        "directory": "asset.07e0498aa32eb68575f2d3d5d05f09ec4edee168f590a627f7236fedb4c55648"
+      },
+      "destinations": {
+        "123456789012-us-east-1": {
+          "repositoryName": "cdk-hnb659fds-container-assets-123456789012-us-east-1",
+          "imageTag": "07e0498aa32eb68575f2d3d5d05f09ec4edee168f590a627f7236fedb4c55648",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::123456789012:role/cdk-hnb659fds-image-publishing-role-123456789012-us-east-1"
+        }
+      }
+    }
+  }
+}
