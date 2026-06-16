@@ -76,6 +76,8 @@ export class ComputeStack extends cdk.Stack {
       taskDefinition: taskDef,
       desiredCount: 1,
       assignPublicIp: false,
+      healthCheckGracePeriod: cdk.Duration.seconds(120),
+      circuitBreaker: { rollback: true },
     });
 
     const listener = props.alb.addListener("ChatListener", {
