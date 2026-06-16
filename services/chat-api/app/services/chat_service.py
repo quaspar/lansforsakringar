@@ -60,13 +60,21 @@ class ChatService:
                     accumulated.append(token)
                     yield token
             finally:
-                assistant_msg = Message(
-                    id=str(ULID()),
-                    role="assistant",
-                    content="".join(accumulated),
-                    model=conv.model,
-                    created_at=datetime.now(UTC),
-                )
-                await self._repo.add_message(owner_sub, conversation_id, assistant_msg)
+                # Persist whatever was generated — full reply on normal
+                # completion, partial on client disconnect. If the provider
+                # failed before emitting any token (e.g. InferenceUnavailable),
+                # accumulated is empty: skip persisting a blank assistant turn
+                # and let the exception propagate so the caller surfaces a 503.
+                if accumulated:
+                    assistant_msg = Message(
+                        id=str(ULID()),
+                        role="assistant",
+                        content="".join(accumulated),
+                        model=conv.model,
+                        created_at=datetime.now(UTC),
+                    )
+                    await self._repo.add_message(
+                        owner_sub, conversation_id, assistant_msg
+                    )
 
         return _stream()

@@ -1,12 +1,30 @@
+from collections.abc import AsyncIterator
+
 import pytest
 
-from app.domain.errors import ConversationNotFound, ModelNotAllowed
+from app.domain.errors import (
+    ConversationNotFound,
+    InferenceUnavailable,
+    ModelNotAllowed,
+)
+from app.domain.models import Message
+from app.providers.base import LLMProvider
 from app.providers.fake import FakeProvider
 from app.repositories.memory import InMemoryRepository
 from app.services.chat_service import ChatService
 
 MODEL = "test-model"
 ALLOWED = {MODEL}
+
+
+class FailingProvider(LLMProvider):
+    """Raises before emitting any token, simulating an unavailable model."""
+
+    async def stream_completion(
+        self, model: str, messages: list[Message]
+    ) -> AsyncIterator[str]:
+        raise InferenceUnavailable("boom")
+        yield ""  # pragma: no cover — makes this an async generator
 
 
 @pytest.fixture
@@ -68,3 +86,17 @@ async def test_list_messages_ordering(svc: ChatService) -> None:
     msgs = await svc.list_messages("user1", conv.id)
     assert msgs[0].role == "user"
     assert msgs[1].role == "assistant"
+
+
+async def test_inference_failure_persists_no_blank_assistant() -> None:
+    # On immediate inference failure the user message is kept, the error
+    # propagates, and no empty assistant turn is persisted.
+    svc = ChatService(InMemoryRepository(), FailingProvider(), ALLOWED)
+    conv = await svc.create_conversation("user1", "Chat", MODEL)
+    stream = await svc.send_message("user1", conv.id, "hello")
+    with pytest.raises(InferenceUnavailable):
+        async for _ in stream:
+            pass
+    msgs = await svc.list_messages("user1", conv.id)
+    assert len(msgs) == 1
+    assert msgs[0].role == "user"

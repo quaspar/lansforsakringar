@@ -58,6 +58,10 @@ def make_auth_dependency(settings: Settings) -> AuthDependency:
                 detail="Missing or invalid Authorization header",
             )
         token = authorization.removeprefix("Bearer ")
+        issuer = (
+            f"https://cognito-idp.{settings.cognito_region}.amazonaws.com"
+            f"/{settings.cognito_user_pool_id}"
+        )
         try:
             jwks = await _get_jwks(settings)
             payload: dict[str, Any] = jwt.decode(
@@ -65,6 +69,7 @@ def make_auth_dependency(settings: Settings) -> AuthDependency:
                 jwks,
                 algorithms=["RS256"],
                 audience=settings.cognito_client_id,
+                issuer=issuer,
                 options={"verify_at_hash": False},
             )
             jwt_sub: str = payload.get("sub", "")
