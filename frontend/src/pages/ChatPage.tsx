@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createConversation, listConversations } from "../api/client";
 import type { Conversation } from "../api/client";
 import ChatView from "../components/ChatView";
