@@ -1,0 +1,40 @@
+services:
+  chat-api:
+    build:
+      context: ./services/chat-api
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_REGION=us-east-1
+      - DYNAMO_TABLE_NAME=chat-service
+      - DYNAMO_ENDPOINT=http://dynamodb-local:8000
+      - REPOSITORY=dynamo
+      - PROVIDER=fake
+      - AUTH_MODE=dev
+      - ALLOWED_MODELS=anthropic.claude-3-haiku-20240307-v1:0,anthropic.claude-3-5-sonnet-20241022-v2:0
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8001:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8000/shell/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - chat-api
