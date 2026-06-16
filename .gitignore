@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.mypy_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.env
+
+# Node / CDK
+node_modules/
+infra/cdk.out/
+infra/dist/
+
+# Frontend build output (tracked only as placeholder)
+frontend/dist/*
+!frontend/dist/.gitkeep
+
+# Misc
+.DS_Store
+*.log
