@@ -42,7 +42,7 @@ export class ComputeStack extends cdk.Stack {
 
     const logGroup = new logs.LogGroup(this, "ChatApiLogs", {
       retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const taskDef = new ecs.FargateTaskDefinition(this, "ChatTaskDef", {
@@ -64,7 +64,7 @@ export class ComputeStack extends cdk.Stack {
         COGNITO_USER_POOL_ID: props.userPool.userPoolId,
         COGNITO_CLIENT_ID: props.userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
-        ALLOWED_MODELS: props.allowedModels.join(","),
+        ALLOWED_MODELS: JSON.stringify(props.allowedModels),
         REPOSITORY: "dynamo",
         PROVIDER: "bedrock",
         AUTH_MODE: "cognito",
