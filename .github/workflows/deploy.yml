@@ -50,7 +50,17 @@ jobs:
 
       - name: CDK deploy
         working-directory: infra
-        run: npx cdk deploy --all --require-approval never
+        run: npx cdk deploy --all --require-approval never --outputs-file /tmp/cdk-outputs.json
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Deploy frontend to S3
+        run: |
+          BUCKET_NAME=$(jq -r '.ChatFrontendStack.FrontendBucketName' /tmp/cdk-outputs.json)
+          aws s3 sync frontend/dist "s3://${BUCKET_NAME}" --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(jq -r '.ChatFrontendStack.FrontendDistributionId' /tmp/cdk-outputs.json)
+          aws cloudfront create-invalidation --distribution-id "${DIST_ID}" --paths "/*"
