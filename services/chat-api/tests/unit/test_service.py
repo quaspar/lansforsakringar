@@ -14,6 +14,7 @@ from app.repositories.memory import InMemoryRepository
 from app.services.chat_service import ChatService
 
 MODEL = "test-model"
+ALT_MODEL = "alt-model"
 ALLOWED = {MODEL}
 
 
@@ -63,6 +64,26 @@ async def test_send_message_persists(svc: ChatService) -> None:
     assert msgs[0].role == "user"
     assert msgs[1].role == "assistant"
     assert "hello" in msgs[1].content
+
+
+async def test_send_message_model_override_recorded() -> None:
+    # A per-message model override is used for inference and stamped on the
+    # persisted assistant message, even though the conversation was created
+    # with a different model.
+    svc = ChatService(InMemoryRepository(), FakeProvider(), {MODEL, ALT_MODEL})
+    conv = await svc.create_conversation("user1", "Chat", MODEL)
+    stream = await svc.send_message("user1", conv.id, "hello", ALT_MODEL)
+    async for _ in stream:
+        pass
+    msgs = await svc.list_messages("user1", conv.id)
+    assert msgs[1].role == "assistant"
+    assert msgs[1].model == ALT_MODEL
+
+
+async def test_send_message_override_not_allowed(svc: ChatService) -> None:
+    conv = await svc.create_conversation("user1", "Chat", MODEL)
+    with pytest.raises(ModelNotAllowed):
+        await svc.send_message("user1", conv.id, "hello", "forbidden-model")
 
 
 async def test_partial_stream_persists(svc: ChatService) -> None:

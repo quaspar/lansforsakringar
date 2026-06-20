@@ -36,9 +36,19 @@ class ChatService:
         return await self._repo.list_messages(owner_sub, conversation_id)
 
     async def send_message(
-        self, owner_sub: str, conversation_id: str, text: str
+        self,
+        owner_sub: str,
+        conversation_id: str,
+        text: str,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         conv = await self._repo.get_conversation(owner_sub, conversation_id)
+
+        # A per-message override lets the user switch models mid-conversation;
+        # fall back to the model the conversation was created with.
+        active_model = model if model is not None else conv.model
+        if active_model not in self._allowed_models:
+            raise ModelNotAllowed(active_model)
 
         user_msg = Message(
             id=str(ULID()),
@@ -55,7 +65,7 @@ class ChatService:
         async def _stream() -> AsyncGenerator[str, None]:
             try:
                 async for token in self._provider.stream_completion(
-                    conv.model, history
+                    active_model, history
                 ):
                     accumulated.append(token)
                     yield token
@@ -70,7 +80,7 @@ class ChatService:
                         id=str(ULID()),
                         role="assistant",
                         content="".join(accumulated),
-                        model=conv.model,
+                        model=active_model,
                         created_at=datetime.now(UTC),
                     )
                     await self._repo.add_message(

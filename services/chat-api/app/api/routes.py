@@ -78,7 +78,9 @@ def make_router(
                 detail=f"Message exceeds {max_message_chars} characters",
             )
 
-        stream = await service.send_message(user.sub, conversation_id, body.content)
+        stream = await service.send_message(
+            user.sub, conversation_id, body.content, body.model
+        )
 
         async def event_generator() -> AsyncIterator[bytes]:
             async for token in stream:
