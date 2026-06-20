@@ -82,6 +82,31 @@ async def test_add_and_list_messages(repo: DynamoDBRepository) -> None:
     assert msgs[0].content == "integration test"
 
 
+async def test_list_conversations_excludes_messages(repo: DynamoDBRepository) -> None:
+    # Two conversations for the same user, one of which has a message. Listing
+    # must return only the conversation items and never the message items,
+    # which share the same partition key. This exercises the FilterExpression
+    # in list_conversations against real DynamoDB.
+    conv_a = await repo.create_conversation("itest-listuser", "First", MODEL)
+    conv_b = await repo.create_conversation("itest-listuser", "Second", MODEL)
+    await repo.add_message(
+        "itest-listuser",
+        conv_a.id,
+        Message(
+            id=str(ULID()),
+            role="user",
+            content="hello",
+            created_at=datetime.now(UTC),
+        ),
+    )
+
+    convs = await repo.list_conversations("itest-listuser")
+    listed_ids = {c.id for c in convs}
+    assert {conv_a.id, conv_b.id} <= listed_ids
+    # No message item leaked in as a "conversation".
+    assert all(c.title in {"First", "Second"} for c in convs if c.id in listed_ids)
+
+
 async def test_message_ordering(repo: DynamoDBRepository) -> None:
     import asyncio
 
