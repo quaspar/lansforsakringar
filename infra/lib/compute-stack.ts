@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as appscaling from "aws-cdk-lib/aws-applicationautoscaling";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
@@ -75,9 +76,25 @@ export class ComputeStack extends cdk.Stack {
       cluster,
       taskDefinition: taskDef,
       desiredCount: 1,
-      assignPublicIp: false,
+      assignPublicIp: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheckGracePeriod: cdk.Duration.seconds(120),
       circuitBreaker: { rollback: true },
+    });
+
+    // Scale to 0 during off-hours to save cost (times in UTC)
+    const scaling = service.autoScaleTaskCount({ minCapacity: 0, maxCapacity: 1 });
+    // 22:00 Stockholm summer (CEST) / 21:00 Stockholm winter (CET)
+    scaling.scaleOnSchedule("ScaleDownAtNight", {
+      schedule: appscaling.Schedule.cron({ hour: "20", minute: "0" }),
+      minCapacity: 0,
+      maxCapacity: 0,
+    });
+    // 08:00 Stockholm summer (CEST) / 07:00 Stockholm winter (CET)
+    scaling.scaleOnSchedule("ScaleUpInMorning", {
+      schedule: appscaling.Schedule.cron({ hour: "6", minute: "0" }),
+      minCapacity: 1,
+      maxCapacity: 1,
     });
 
     const listener = props.alb.addListener("ChatListener", {
