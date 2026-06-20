@@ -4,17 +4,26 @@ export default function LoginPage() {
   const { login } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="bg-gray-800 rounded-2xl p-10 flex flex-col items-center gap-6 shadow-2xl">
-        <h1 className="text-white text-3xl font-bold">AI Chat</h1>
-        <p className="text-gray-400 text-sm text-center max-w-xs">
-          Sign in to start a conversation powered by AWS Bedrock.
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-[18px] border border-line bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,.12)]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-[15px] bg-brand shadow-[0_6px_18px_rgba(16,24,40,.16)]">
+          <div className="h-[18px] w-[18px] rotate-45 rounded-[3px] bg-white" />
+        </div>
+        <div className="text-center">
+          <h1 className="text-[22px] font-extrabold tracking-[-.01em]">
+            Assistenten
+          </h1>
+          <p className="mt-1 text-[13px] text-ink-muted">Försäkring &amp; bank</p>
+        </div>
+        <p className="max-w-xs text-center text-[13.5px] leading-[1.55] text-ink-faint">
+          Logga in för att börja en konversation med din försäkrings- och
+          bankassistent.
         </p>
         <button
           onClick={login}
-          className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-8 py-3 font-medium transition-colors"
+          className="w-full rounded-[11px] bg-brand px-8 py-3 text-[14px] font-semibold text-white shadow-[0_1px_3px_rgba(16,24,40,.18)] transition hover:bg-brand-strong"
         >
-          Sign in with Cognito
+          Logga in med Cognito
         </button>
       </div>
     </div>
