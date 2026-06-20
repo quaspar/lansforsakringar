@@ -32,31 +32,94 @@ export class FrontendStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
+    // SPA fallback: client-side routes like /callback or /login are not real
+    // S3 objects. Rewrite extensionless request paths to /index.html so the
+    // React router can handle them. Static assets (anything with a file
+    // extension, e.g. *.js / *.css / config.js) are served from S3 unchanged.
+    //
+    // This is done with a viewer-request function rather than the distribution's
+    // `errorResponses`, because custom error responses apply to *every* behavior
+    // on the distribution. Once the API is attached below, an error-response
+    // rule mapping 403/404 -> 200 /index.html would also rewrite legitimate
+    // backend 403/404 responses (e.g. the cross-user isolation 404) into an
+    // HTML page — which the frontend would then fail to parse as JSON.
+    const spaFallback = new cloudfront.Function(this, "SpaFallback", {
+      comment: "Serve index.html for client-side routes (extensionless paths)",
+      code: cloudfront.FunctionCode.fromInline(
+        [
+          "function handler(event) {",
+          "  var request = event.request;",
+          "  var uri = request.uri;",
+          "  if (uri !== '/' && uri.indexOf('.') === -1) {",
+          "    request.uri = '/index.html';",
+          "  }",
+          "  return request;",
+          "}",
+        ].join("\n")
+      ),
+    });
+
+    // Strip the leading /api prefix before forwarding to the backend ALB.
+    // The chat-api serves un-prefixed paths (/conversations, /health, ...);
+    // /api is purely a frontend convention that the local Vite proxy and the
+    // Docker nginx config also rewrite away. Doing it here in CloudFront keeps
+    // the backend unchanged.
+    const stripApiPrefix = new cloudfront.Function(this, "StripApiPrefix", {
+      comment: "Strip the /api prefix before forwarding to the backend ALB",
+      code: cloudfront.FunctionCode.fromInline(
+        [
+          "function handler(event) {",
+          "  var request = event.request;",
+          "  request.uri = request.uri.replace(/^\\/api/, '');",
+          "  if (request.uri === '') { request.uri = '/'; }",
+          "  return request;",
+          "}",
+        ].join("\n")
+      ),
+    });
+
+    // apiEndpoint is "http://<alb-dns-name>"; CloudFront origins take a bare
+    // domain, so pull the host out of the URL. The ALB listener is HTTP:80.
+    const apiOrigin = new origins.HttpOrigin(
+      cdk.Fn.select(2, cdk.Fn.split("/", props.apiEndpoint)),
+      { protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY }
+    );
+
     const distribution = new cloudfront.Distribution(this, "FrontendCdn", {
       defaultBehavior: {
         origin: new origins.S3Origin(bucket),
         viewerProtocolPolicy:
           cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        functionAssociations: [
+          {
+            function: spaFallback,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
+      },
+      // Route API calls to the backend ALB instead of letting them fall through
+      // to the S3 origin (which would return the SPA's index.html and break
+      // JSON parsing on the client). Auth headers, methods and bodies must all
+      // reach the origin, and responses must stream (SSE), so caching is off.
+      additionalBehaviors: {
+        "/api/*": {
+          origin: apiOrigin,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy:
+            cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          functionAssociations: [
+            {
+              function: stripApiPrefix,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
+        },
       },
       defaultRootObject: "index.html",
-      // SPA fallback: client-side routes like /callback are not real S3
-      // objects. With a private bucket served via OAI, S3 returns 403
-      // (AccessDenied) for a missing key — not 404 — because the identity
-      // lacks s3:ListBucket. Map both to index.html so the React router can
-      // handle the route (e.g. the Cognito OAuth callback).
-      errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: "/index.html",
-        },
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: "/index.html",
-        },
-      ],
     });
 
     const appUrl = `https://${distribution.distributionDomainName}`;
