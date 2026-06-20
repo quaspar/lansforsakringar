@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from logging import getLogger
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -10,8 +11,11 @@ from app.api.schemas import (
     MessageResponse,
     SendMessageRequest,
 )
+from app.domain.errors import InferenceUnavailable
 from app.domain.models import Conversation, Message
 from app.services.chat_service import ChatService
+
+logger = getLogger(__name__)
 
 
 def _conv_to_response(conv: Conversation) -> ConversationResponse:
@@ -83,8 +87,17 @@ def make_router(
         )
 
         async def event_generator() -> AsyncIterator[bytes]:
-            async for token in stream:
-                yield f"data: {token}\n\n".encode()
+            # The stream is already a 200 response by the time inference runs,
+            # so a provider failure can't become an HTTP error status. Emit a
+            # terminal SSE `error` event instead of letting the exception bubble
+            # into Starlette (which would raise "response already started").
+            try:
+                async for token in stream:
+                    yield f"data: {token}\n\n".encode()
+            except InferenceUnavailable as exc:
+                logger.warning("inference failed mid-stream: %s", exc)
+                yield b"event: error\ndata: upstream_error\n\n"
+                return
             yield b"event: done\ndata: \n\n"
 
         return StreamingResponse(
