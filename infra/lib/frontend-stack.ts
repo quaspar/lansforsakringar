@@ -40,7 +40,17 @@ export class FrontendStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
       },
       defaultRootObject: "index.html",
+      // SPA fallback: client-side routes like /callback are not real S3
+      // objects. With a private bucket served via OAI, S3 returns 403
+      // (AccessDenied) for a missing key — not 404 — because the identity
+      // lacks s3:ListBucket. Map both to index.html so the React router can
+      // handle the route (e.g. the Cognito OAuth callback).
       errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+        },
         {
           httpStatus: 404,
           responseHttpStatus: 200,
