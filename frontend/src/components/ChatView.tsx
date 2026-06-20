@@ -4,6 +4,7 @@ import { listMessages, sendMessage } from "../api/client";
 import Composer from "./Composer";
 import Markdown from "./Markdown";
 import MessageActions from "./MessageActions";
+import { modelLabel } from "../lib/models";
 
 interface Props {
   conversationId: string;
@@ -111,18 +112,30 @@ export default function ChatView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[768px] flex-col gap-7 px-4 pb-7 pt-[34px] sm:px-7">
-          {messages.map((msg, i) =>
-            msg.role === "user" ? (
-              <UserBubble key={msg.id} content={msg.content} />
-            ) : (
-              <AssistantMessage
-                key={msg.id}
-                content={msg.content}
-                onRegenerate={regenerate}
-                canRegenerate={i === messages.length - 1 && !streaming}
-              />
-            )
-          )}
+          {messages.flatMap((msg, i) => {
+            const prevAssistant = messages.slice(0, i).reverse().find((m) => m.role === "assistant");
+            const modelChanged =
+              msg.role === "assistant" &&
+              msg.model &&
+              prevAssistant?.model &&
+              msg.model !== prevAssistant.model;
+
+            const el =
+              msg.role === "user" ? (
+                <UserBubble key={msg.id} content={msg.content} />
+              ) : (
+                <AssistantMessage
+                  key={msg.id}
+                  content={msg.content}
+                  onRegenerate={regenerate}
+                  canRegenerate={i === messages.length - 1 && !streaming}
+                />
+              );
+
+            return modelChanged
+              ? [<ModelSwitchHint key={`switch-${msg.id}`} model={msg.model!} />, el]
+              : [el];
+          })}
 
           {streaming && (
             <AssistantMessage content={streamingContent} streaming />
@@ -152,6 +165,16 @@ export default function ChatView({
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function ModelSwitchHint({ model }: { model: string }) {
+  return (
+    <div className="flex items-center gap-3 text-[11.5px] text-ink-faint">
+      <div className="h-px flex-1 bg-line" />
+      <span>Switched to {modelLabel(model)}</span>
+      <div className="h-px flex-1 bg-line" />
     </div>
   );
 }

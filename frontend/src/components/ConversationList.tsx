@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Conversation } from "../api/client";
 import { groupByDate, initials, displayName } from "../lib/format";
-import { modelLabel } from "../lib/models";
 
 interface Props {
   conversations: Conversation[];
@@ -118,9 +117,6 @@ export default function ConversationList({
                     }
                   >
                     {conv.title}
-                  </div>
-                  <div className="ml-[5px] truncate text-[11.5px] text-ink-faint">
-                    {modelLabel(conv.model)}
                   </div>
                 </button>
               );
