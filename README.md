@@ -1,20 +1,20 @@
-# AI Chat Service
+# AI-chattjänst
 
-A streamed AI chat service built for a recruitment case study. Users create conversations, send messages, and receive token-by-token streamed answers from AWS Bedrock. All history is persisted in DynamoDB.
+En strömmad AI-chattjänst byggd för en rekryteringsuppgift. Användare skapar konversationer, skickar meddelanden och får svar strömmade token för token från AWS Bedrock. All historik lagras permanent i DynamoDB.
 
-See [docs/architecture.md](docs/architecture.md) for design rationale and [docs/implementation-plan.md](docs/implementation-plan.md) for the build plan.
+Se [docs/architecture.md](docs/architecture.md) för designresonemang och [docs/implementation-plan.md](docs/implementation-plan.md) för byggplanen.
 
 ---
 
-## Run locally (no AWS account required)
+## Kör lokalt (inget AWS-konto krävs)
 
-Prerequisites: Docker, Docker Compose.
+Förutsättningar: Docker, Docker Compose.
 
 ```bash
-# 1. Start DynamoDB Local and the API
+# 1. Starta DynamoDB Local och API:et
 docker compose up chat-api dynamodb-local -d
 
-# 2. Create the local table
+# 2. Skapa den lokala tabellen
 cd services/chat-api
 pip install -e ".[dev]"
 DYNAMO_ENDPOINT=http://localhost:8001 \
@@ -22,42 +22,42 @@ AWS_ACCESS_KEY_ID=dummy \
 AWS_SECRET_ACCESS_KEY=dummy \
 python scripts/create_local_table.py
 
-# 3. Test the API (dev auth mode — no JWT needed)
+# 3. Testa API:et (dev-autentiseringsläge — ingen JWT behövs)
 curl -s http://localhost:8000/health
 
-# Create a conversation
+# Skapa en konversation
 curl -s -X POST http://localhost:8000/conversations \
   -H "Content-Type: application/json" \
   -H "X-Dev-Sub: alice" \
   -d '{"title":"My Chat","model":"anthropic.claude-3-haiku-20240307-v1:0"}' | jq
 
-# Stream a message (replace <id> with the conversation id)
+# Strömma ett meddelande (ersätt <id> med konversationens id)
 curl -N -X POST http://localhost:8000/conversations/<id>/messages \
   -H "Content-Type: application/json" \
   -H "X-Dev-Sub: alice" \
   -d '{"content":"Hello!"}'
 
-# 4. Start the frontend
+# 4. Starta frontend
 docker compose up frontend -d
-# Open http://localhost:5173
+# Öppna http://localhost:5173
 ```
 
-### Isolation smoke test
+### Röktest för isolering
 
 ```bash
-# As userB — should get 404, not userA's data
+# Som userB — ska få 404, inte userA:s data
 curl -s http://localhost:8000/conversations/<alice-conv-id>/messages \
   -H "X-Dev-Sub: bob"
 # {"error":{"code":"NOT_FOUND","message":"Conversation not found"}}
 ```
 
-### Run tests
+### Kör tester
 
 ```bash
 cd services/chat-api
-pytest tests/unit -v          # unit tests (no AWS)
+pytest tests/unit -v          # enhetstester (ingen AWS)
 
-# Integration tests need DynamoDB Local running
+# Integrationstester kräver att DynamoDB Local körs
 DYNAMO_ENDPOINT=http://localhost:8001 \
 AWS_ACCESS_KEY_ID=dummy \
 AWS_SECRET_ACCESS_KEY=dummy \
@@ -66,50 +66,50 @@ pytest tests/integration -v
 
 ---
 
-## Deploy to AWS
+## Driftsätt till AWS
 
-Prerequisites: AWS CLI configured, Docker, Node 20, CDK bootstrapped.
+Förutsättningar: AWS CLI konfigurerat, Docker, Node 20, CDK bootstrappat.
 
 ```bash
-# 1. Bootstrap CDK (once per account/region)
+# 1. Bootstrappa CDK (en gång per konto/region)
 cd infra
 npm ci
 npx cdk bootstrap
 
-# 2. Deploy all stacks
+# 2. Driftsätt alla stackar
 npx cdk deploy --all
 
-# Outputs include: UserPoolId, UserPoolClientId, CognitoDomain, ApiEndpoint, FrontendUrl
+# Utdata inkluderar: UserPoolId, UserPoolClientId, CognitoDomain, ApiEndpoint, FrontendUrl
 
-# 3. Update the Cognito app client callback URL to the CloudFront URL
-# (or set it in the CDK before deploying)
+# 3. Uppdatera Cognito-appklientens callback-URL till CloudFront-URL:en
+# (eller ange den i CDK innan driftsättning)
 ```
 
-### Environment variables (`.env.example`)
+### Miljövariabler (`.env.example`)
 
-| Variable | Default | Description |
+| Variabel | Standard | Beskrivning |
 |---|---|---|
-| `AWS_REGION` | `us-east-1` | AWS region |
-| `DYNAMO_TABLE_NAME` | `chat-service` | DynamoDB table name |
-| `COGNITO_USER_POOL_ID` | — | Cognito user pool ID |
-| `COGNITO_CLIENT_ID` | — | Cognito app client ID |
-| `COGNITO_REGION` | `us-east-1` | Cognito region |
-| `ALLOWED_MODELS` | Claude Haiku, Sonnet | Comma-separated Bedrock model IDs |
-| `REPOSITORY` | `memory` | `memory` or `dynamo` |
-| `PROVIDER` | `fake` | `fake` or `bedrock` |
-| `AUTH_MODE` | `dev` | `dev` (X-Dev-Sub header) or `cognito` (JWT) |
-| `MAX_MESSAGE_CHARS` | `8000` | Max message length |
+| `AWS_REGION` | `us-east-1` | AWS-region |
+| `DYNAMO_TABLE_NAME` | `chat-service` | Namn på DynamoDB-tabellen |
+| `COGNITO_USER_POOL_ID` | — | Cognito user pool-ID |
+| `COGNITO_CLIENT_ID` | — | Cognito appklient-ID |
+| `COGNITO_REGION` | `us-east-1` | Cognito-region |
+| `ALLOWED_MODELS` | Claude Haiku, Sonnet | Kommaseparerade Bedrock-modell-ID:n |
+| `REPOSITORY` | `memory` | `memory` eller `dynamo` |
+| `PROVIDER` | `fake` | `fake` eller `bedrock` |
+| `AUTH_MODE` | `dev` | `dev` (X-Dev-Sub-header) eller `cognito` (JWT) |
+| `MAX_MESSAGE_CHARS` | `8000` | Maximal meddelandelängd |
 
 ---
 
-## Design choices
+## Designval
 
-**Single-table DynamoDB** — all conversation and message data lives under `USER#<sub>` partition keys, making all queries O(1) by user with no cross-user access possible at the storage level.
+**DynamoDB med en enda tabell** — all konversations- och meddelandedata lagras under partitionsnycklar av typen `USER#<sub>`, vilket gör alla förfrågningar O(1) per användare utan att åtkomst mellan användare är möjlig på lagringsnivå.
 
-**SSE over WebSockets** — simpler to implement and proxy; sufficient for a chat use case where only the server pushes data. Fargate (not Lambda) is used to avoid response buffering.
+**SSE framför WebSockets** — enklare att implementera och proxa; tillräckligt för ett chattfall där enbart servern skickar data. Fargate (inte Lambda) används för att undvika buffring av svar.
 
-**Interface-first design** — `ConversationRepository` and `LLMProvider` are ABCs. CI runs entirely against in-memory fakes with no AWS credentials. Real backends are swapped in via config.
+**Gränssnittsfirst-design** — `ConversationRepository` och `LLMProvider` är abstrakta basklasser (ABC:er). CI körs helt mot in-memory-fakes utan AWS-credentials. Verkliga backends kopplas in via konfiguration.
 
-**Owner-sub from JWT always** — the `owner_sub` is extracted from the verified Cognito JWT and is a mandatory first argument on every repository method. Client input can never influence which user's data is accessed.
+**Owner-sub alltid från JWT** — `owner_sub` extraheras från den verifierade Cognito-JWT:n och är ett obligatoriskt första argument på varje repository-metod. Klientindata kan aldrig påverka vilken användares data som nås.
 
-**Partial-stream persistence** — `send_message` uses `try/finally` to persist whatever tokens were accumulated, even if the client disconnects before the stream completes.
+**Persistens av delvis ström** — `send_message` använder `try/finally` för att lagra de tokens som hunnit ackumuleras, även om klienten kopplar ner innan strömmen är klar.
