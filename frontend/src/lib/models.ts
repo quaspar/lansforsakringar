@@ -12,8 +12,8 @@ export interface ModelOption {
 // only supports Bedrock Anthropic models today.
 export const MODELS: ModelOption[] = [
   {
-    id: "anthropic.claude-3-haiku-20240307-v1:0",
-    label: "Claude 3 Haiku",
+    id: "anthropic.claude-haiku-4-5-20251001-v1:0",
+    label: "Claude Haiku 4.5",
     description: "Snabb · vardagsfrågor",
     provider: "Anthropic",
     dot: "#d97757",

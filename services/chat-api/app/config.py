@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     cognito_client_id: str = ""
     cognito_region: str = "us-east-1"
     allowed_models: list[str] = [
-        "anthropic.claude-3-haiku-20240307-v1:0",
+        "anthropic.claude-haiku-4-5-20251001-v1:0",
         "anthropic.claude-3-5-sonnet-20241022-v2:0",
     ]
     repository: Literal["memory", "dynamo"] = "memory"

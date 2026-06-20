@@ -24,7 +24,7 @@ const computeStack = new ComputeStack(app, "ChatComputeStack", {
   userPool: authStack.userPool,
   userPoolClient: authStack.userPoolClient,
   allowedModels: [
-    "anthropic.claude-3-haiku-20240307-v1:0",
+    "anthropic.claude-haiku-4-5-20251001-v1:0",
     "anthropic.claude-3-5-sonnet-20241022-v2:0",
   ],
 });
