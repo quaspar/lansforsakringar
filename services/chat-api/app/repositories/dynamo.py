@@ -101,7 +101,7 @@ class DynamoDBRepository(ConversationRepository):
             resp = await table.query(
                 KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
                 & Key("SK").begins_with("CONV#"),
-                FilterExpression=Attr("SK").not_contains("#MSG#"),  # type: ignore[attr-defined]
+                FilterExpression=~Attr("SK").contains("#MSG#"),
             )
         return [self._item_to_conversation(item) for item in resp.get("Items", [])]
 
