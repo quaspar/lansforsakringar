@@ -9,8 +9,8 @@ function AppRoutes() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <div className="text-ink-faint">Laddar…</div>
       </div>
     );
   }

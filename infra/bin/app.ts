@@ -24,8 +24,14 @@ const computeStack = new ComputeStack(app, "ChatComputeStack", {
   userPool: authStack.userPool,
   userPoolClient: authStack.userPoolClient,
   allowedModels: [
-    "anthropic.claude-3-haiku-20240307-v1:0",
-    "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    // Claude 4.x and Llama 3.3 are invoked through cross-region inference
+    // profiles (the `us.` prefix), not on-demand bare model IDs — invoking the
+    // bare ID returns "on-demand throughput isn't supported". gpt-oss-120b is
+    // on-demand only and has no inference profile, so it stays unprefixed.
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "us.anthropic.claude-sonnet-4-6",
+    "us.meta.llama3-3-70b-instruct-v1:0",
+    "openai.gpt-oss-120b-1:0",
   ],
 });
 computeStack.addDependency(dataStack);
@@ -37,6 +43,7 @@ const frontendStack = new FrontendStack(app, "ChatFrontendStack", {
   apiEndpoint: computeStack.apiEndpoint,
   cognitoDomain: authStack.cognitoDomain,
   cognitoClientId: authStack.userPoolClient.userPoolClientId,
+  userPool: authStack.userPool,
 });
 frontendStack.addDependency(computeStack);
 frontendStack.addDependency(authStack);

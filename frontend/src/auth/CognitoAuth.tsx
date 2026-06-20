@@ -1,8 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  cognitoClientId as CLIENT_ID,
+  cognitoDomain as COGNITO_DOMAIN,
+  isCognitoConfigured,
+} from "../config";
 
 interface AuthContextValue {
   token: string | null;
   sub: string | null;
+  email: string | null;
   login: () => void;
   logout: () => void;
   isLoading: boolean;
@@ -11,13 +17,23 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   token: null,
   sub: null,
+  email: null,
   login: () => {},
   logout: () => {},
   isLoading: true,
 });
 
-const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN ?? "";
-const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID ?? "";
+/** Best-effort read of the `email` claim from a Cognito id_token JWT. */
+function emailFromToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.email ?? payload["cognito:username"] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const REDIRECT_URI = window.location.origin + "/callback";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -69,7 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function login() {
-    if (!COGNITO_DOMAIN || !CLIENT_ID) return;
+    if (!isCognitoConfigured) {
+      console.error(
+        "Cognito is not configured: missing cognitoDomain / cognitoClientId. " +
+          "In production these come from /config.js (injected by the CDK " +
+          "FrontendStack); for local dev set VITE_COGNITO_DOMAIN and " +
+          "VITE_COGNITO_CLIENT_ID."
+      );
+      return;
+    }
     window.location.href =
       `${COGNITO_DOMAIN}/login?response_type=code` +
       `&client_id=${CLIENT_ID}` +
@@ -90,7 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ token, sub, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{ token, sub, email: emailFromToken(token), login, logout, isLoading }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -77,7 +77,8 @@ export async function listMessages(conversationId: string): Promise<Message[]> {
 
 export async function* sendMessage(
   conversationId: string,
-  content: string
+  content: string,
+  model?: string
 ): AsyncGenerator<string> {
   const resp = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
     method: "POST",
@@ -85,7 +86,7 @@ export async function* sendMessage(
       "Content-Type": "application/json",
       ...authHeaders(),
     },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(model ? { content, model } : { content }),
   });
 
   if (!resp.ok || !resp.body) {
@@ -103,10 +104,12 @@ export async function* sendMessage(
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        yield line.slice(6);
+      if (line.startsWith("event: error")) {
+        throw new Error("upstream_error");
       } else if (line.startsWith("event: done")) {
         return;
+      } else if (line.startsWith("data: ")) {
+        yield line.slice(6);
       }
     }
   }
