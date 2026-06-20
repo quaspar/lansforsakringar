@@ -1,119 +1,118 @@
-# AI Chat Service — Architecture
+# AI-chattjänst — Arkitektur
 
-A small service where a user can chat with an LLM, with conversation history
-persisted permanently. Built to demonstrate clean structure, clear seams, and a
-realistic path to commercial use.
+En liten tjänst där en användare kan chatta med en LLM, med konversationshistorik
+som lagras permanent. Byggd för att demonstrera ren struktur, tydliga gränssnitt och
+en realistisk väg till kommersiell användning.
 
-## 1. Architecture Overview
+## 1. Arkitekturöversikt
 
-A small set of focused services, cleanly layered, matching a distributed /
-microarchitecture style:
+En liten uppsättning fokuserade tjänster, rent lagerindelade, i en distribuerad /
+mikroarkitekturstil:
 
 ```
                         ┌──────────────────────┐
-                        │   React + Tailwind    │  (SPA on S3 + CloudFront)
+                        │   React + Tailwind    │  (SPA på S3 + CloudFront)
                         └──────────┬───────────┘
-                                   │ HTTPS + JWT (Cognito tokens), SSE for streaming
+                                   │ HTTPS + JWT (Cognito-tokens), SSE för strömning
                                    ▼
                         ┌──────────────────────┐
-                        │   ALB                 │  (validates Cognito JWT)
+                        │   ALB                 │  (validerar Cognito-JWT)
                         └──────────┬───────────┘
                                    ▼
             ┌──────────────────────────────────────────────┐
-            │      Chat API service (FastAPI on Fargate)    │
-            │  - Conversation & message endpoints           │
-            │  - AuthZ enforcement (owner = sub claim)      │
-            │  - Orchestrates persistence + inference        │
+            │      Chat-API-tjänst (FastAPI på Fargate)     │
+            │  - Konversations- och meddelande-endpoints    │
+            │  - AuthZ-kontroll (ägare = sub-claim)         │
+            │  - Orkestrerar persistens + inferens           │
             └───────┬───────────────────────────┬──────────┘
                     │                            │
           ┌─────────▼─────────┐        ┌─────────▼──────────┐
-          │  LLM Integration   │       │   Data Access      │
-          │  (LLMProvider IF → │       │  (Repository IF →  │
+          │  LLM-integration   │       │   Dataåtkomst      │
+          │  (LLMProvider-IF → │       │  (Repository-IF →  │
           │   BedrockProvider) │       │   DynamoDBRepo)    │
           └─────────┬─────────┘        └─────────┬──────────┘
                     ▼                            ▼
             ┌───────────────┐          ┌───────────────────┐
             │  AWS Bedrock  │          │     DynamoDB      │
-            │ (model chosen │          │ single-table      │
-            │  by user)     │          │                   │
+            │ (modell vald  │          │ enkel tabell      │
+            │  av användare)│          │                   │
             └───────────────┘          └───────────────────┘
 ```
 
-The FastAPI service is split into three replaceable layers — this is the core
-of the "evolvability" argument, and each seam is a place to split into a
-separate service or swap a vendor without touching the rest:
+FastAPI-tjänsten är uppdelad i tre utbytbara lager — detta är kärnan i
+"evolverbarhets"-argumentet, och varje gränssnitt är en plats där man kan dela upp
+i en separat tjänst eller byta leverantör utan att röra resten:
 
-1. **API layer** — routing, request/response schemas, auth enforcement, error
-   mapping. Knows nothing about Bedrock or DynamoDB.
-2. **LLM integration layer** — an `LLMProvider` interface with a
-   `BedrockProvider` implementation. Swapping or adding a provider is one new
-   class.
-3. **Data access layer** — a `ConversationRepository` interface with a
-   `DynamoDBRepository` implementation. Swapping the datastore is one new class.
+1. **API-lager** — routing, scheman för förfrågan/svar, autentiseringskontroll,
+   felmappning. Vet ingenting om Bedrock eller DynamoDB.
+2. **LLM-integrationslager** — ett `LLMProvider`-gränssnitt med en
+   `BedrockProvider`-implementation. Att byta eller lägga till en leverantör är en
+   ny klass.
+3. **Dataåtkomstlager** — ett `ConversationRepository`-gränssnitt med en
+   `DynamoDBRepository`-implementation. Att byta datalager är en ny klass.
 
-## 2. Technology Choices
+## 2. Teknikval
 
-| Concern    | Choice                              | Justification                                                                      |
+| Område     | Val                                 | Motivering                                                                        |
 | ---------- | ----------------------------------- | --------------------------------------------------------------------------------- |
-| Backend    | **Python + FastAPI**                | Async fits LLM latency, Pydantic validation, auto OpenAPI docs.                    |
-| Inference  | **AWS Bedrock**                     | Managed, IAM-scoped, no third-party key rotation, data stays in-account.          |
-| Model      | **User-selectable (allowlisted)**   | The user chooses the model; the service enforces a server-side allowlist.         |
-| Database   | **DynamoDB (on-demand)**            | Serverless, single-digit-ms key access, scale-to-zero cost, structural isolation. |
-| Auth       | **Amazon Cognito**                  | Managed user pool, issues JWTs; the `sub` claim is the tenancy key.               |
-| Frontend   | **React + Tailwind**                | Component model fits chat; Tailwind for fast, consistent styling.                  |
-| Compute    | **AWS Fargate**                     | Long-lived container streams tokens (SSE) naturally; no cold starts.              |
-| IaC        | **AWS CDK**                         | Typed, testable infrastructure in one language alongside the app.                 |
-| Packaging  | **Docker** per service              | Reproducible runnable solution; compose locally, Fargate in AWS.                  |
-| Local dev  | **docker-compose** + DynamoDB Local + `FakeProvider` | Reviewer runs everything with no AWS account.                    |
+| Backend    | **Python + FastAPI**                | Async passar LLM-latens, Pydantic-validering, automatisk OpenAPI-dokumentation.   |
+| Inferens   | **AWS Bedrock**                     | Hanterad, IAM-avgränsad, ingen rotation av tredjepartsnycklar, data stannar i kontot. |
+| Modell     | **Användarvald (tillåtelselistad)** | Användaren väljer modellen; tjänsten upprätthåller en serverside-tillåtelselista. |
+| Databas    | **DynamoDB (on-demand)**            | Serverlös, ensiffrig ms nyckelåtkomst, skala-till-noll-kostnad, strukturell isolering. |
+| Auth       | **Amazon Cognito**                  | Hanterad user pool som utfärdar JWT:er; `sub`-claimen är tenancy-nyckeln.          |
+| Frontend   | **React + Tailwind**                | Komponentmodellen passar chatt; Tailwind för snabb, enhetlig styling.             |
+| Beräkning  | **AWS Fargate**                     | Långlivad container strömmar tokens (SSE) naturligt; inga kallstarter.            |
+| IaC        | **AWS CDK**                         | Typad, testbar infrastruktur i ett språk tillsammans med appen.                   |
+| Paketering | **Docker** per tjänst               | Reproducerbar körbar lösning; compose lokalt, Fargate i AWS.                       |
+| Lokal utveckling | **docker-compose** + DynamoDB Local + `FakeProvider` | Granskaren kör allt utan AWS-konto.                          |
 
-### Why DynamoDB
+### Varför DynamoDB
 
-- **Cost for this context:** on-demand billing + 25 GB free storage → an idle
-  demo costs effectively nothing, vs. ~$20–45 to keep a serverless SQL engine
-  warm for two weeks.
-- **Access pattern fit:** chat is append-heavy, owner-scoped, key-based reads —
-  DynamoDB's sweet spot.
-- **Zero ops / predictable latency** at any scale.
-- **Tenant isolation is structural** (partitioned by user) — see Security.
+- **Kostnad i detta sammanhang:** on-demand-debitering + 25 GB gratis lagring → en
+  inaktiv demo kostar i praktiken ingenting, jämfört med ~$20–45 för att hålla en
+  serverlös SQL-motor varm i två veckor.
+- **Passar åtkomstmönstret:** chatt är skrivtung, ägaravgränsad, nyckelbaserade
+  läsningar — DynamoDB:s styrka.
+- **Noll drift / förutsägbar latens** i vilken skala som helst.
+- **Tenantisolering är strukturell** (partitionerad per användare) — se Säkerhet.
 
-**Where SQL (Postgres + pgvector) would win** and how we'd switch: once we need
-full-text search over history, ad-hoc analytics/billing queries, or semantic
-search for RAG. The `ConversationRepository` seam is exactly where that swap
-happens, so the choice is not a lock-in.
+**Där SQL (Postgres + pgvector) skulle vinna** och hur vi skulle byta: så snart vi
+behöver fritextsökning över historik, ad-hoc-analys/faktureringsförfrågningar eller
+semantisk sökning för RAG. `ConversationRepository`-gränssnittet är precis där det
+bytet sker, så valet är ingen inlåsning.
 
-### Why Fargate (streaming)
+### Varför Fargate (strömning)
 
-Token streaming pushes us to Fargate. Lambda *can* stream (response streaming
-via Function URLs), but with friction for this stack: API Gateway buffers and
-would have to be bypassed, the FastAPI/Mangum adapter does not stream, and cold
-starts hurt first-token latency. Fargate holds a long-lived connection, relays
-Bedrock's `InvokeModelWithResponseStream` token-by-token over SSE with
-FastAPI's `StreamingResponse`, and runs identically under docker-compose
-locally.
+Tokenströmning driver oss till Fargate. Lambda *kan* strömma (svarsströmning via
+Function URLs), men med friktion för denna stack: API Gateway buffrar och skulle
+behöva kringgås, FastAPI/Mangum-adaptern strömmar inte, och kallstarter skadar
+latensen för första token. Fargate håller en långlivad anslutning, vidarebefordrar
+Bedrocks `InvokeModelWithResponseStream` token för token över SSE med FastAPI:s
+`StreamingResponse`, och körs identiskt under docker-compose lokalt.
 
-## 3. Data Model — DynamoDB single-table design
+## 3. Datamodell — DynamoDB-design med en enda tabell
 
-Two entity types, one table, partitioned by user for isolation and efficient
-access:
+Två entitetstyper, en tabell, partitionerad per användare för isolering och
+effektiv åtkomst:
 
 ```
-PK                    SK                          Attributes
+PK                    SK                          Attribut
 USER#<sub>            CONV#<conversationId>       title, model, createdAt, updatedAt
 USER#<sub>            CONV#<cid>#MSG#<ulid>        role(user|assistant), content, model, tokens, createdAt
 ```
 
-- **List a user's conversations:** Query `PK = USER#<sub>` +
-  `begins_with(SK, "CONV#")`, filter to conversation records.
-- **Fetch messages in order:** Query `PK = USER#<sub>` +
-  `begins_with(SK, "CONV#<cid>#MSG#")`. The ULID sort key yields chronological
-  order for free.
-- **Isolation is structural:** every item is physically keyed by the owner's
-  `sub`; a query can only ever address one user's partition.
+- **Lista en användares konversationer:** Query `PK = USER#<sub>` +
+  `begins_with(SK, "CONV#")`, filtrera till konversationsposter.
+- **Hämta meddelanden i ordning:** Query `PK = USER#<sub>` +
+  `begins_with(SK, "CONV#<cid>#MSG#")`. ULID-sorteringsnyckeln ger kronologisk
+  ordning gratis.
+- **Isolering är strukturell:** varje post nycklas fysiskt på ägarens `sub`; en
+  query kan aldrig nå mer än en användares partition.
 
-The chosen `model` is stored on the conversation (and per message) so history
-is reproducible and auditable.
+Den valda `model` lagras på konversationen (och per meddelande) så att historik är
+reproducerbar och granskningsbar.
 
-## 4. Class Diagram
+## 4. Klassdiagram
 
 ```mermaid
 classDiagram
@@ -189,116 +188,117 @@ classDiagram
     Conversation "1" --> "*" Message
 ```
 
-## 5. Sequence Diagram — send a message (with streaming)
+## 5. Sekvensdiagram — skicka ett meddelande (med strömning)
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant UI as React UI
+    actor User as Användare
+    participant UI as React-UI
     participant ALB
-    participant API as Chat API (FastAPI)
+    participant API as Chat-API (FastAPI)
     participant Repo as DynamoDBRepository
     participant DDB as DynamoDB
     participant LLM as BedrockProvider
     participant BR as AWS Bedrock
 
-    User->>UI: Type message + send
+    User->>UI: Skriv meddelande + skicka
     UI->>ALB: POST /conversations/{id}/messages (JWT)
-    ALB->>ALB: Validate Cognito JWT
-    ALB->>API: Forward request (sub claim)
-    API->>API: Validate payload, check model allowlist
+    ALB->>ALB: Validera Cognito-JWT
+    ALB->>API: Vidarebefordra förfrågan (sub-claim)
+    API->>API: Validera payload, kontrollera modell-tillåtelselista
     API->>Repo: get_conversation(sub, id)
     Repo->>DDB: Query PK=USER#sub, SK=CONV#id
-    DDB-->>Repo: Conversation (or none)
-    alt Not found or not owner
+    DDB-->>Repo: Konversation (eller ingen)
+    alt Hittas ej eller inte ägare
         API-->>UI: 404 / 403
-    else Owner verified
+    else Ägare verifierad
         API->>Repo: add_message(sub, id, user_msg)
-        Repo->>DDB: PutItem (user message)
+        Repo->>DDB: PutItem (användarmeddelande)
         API->>Repo: list_messages(sub, id)
-        Repo->>DDB: Query message history
-        DDB-->>Repo: Prior messages
+        Repo->>DDB: Query meddelandehistorik
+        DDB-->>Repo: Tidigare meddelanden
         API->>LLM: stream_completion(model, history)
         LLM->>BR: InvokeModelWithResponseStream
-        loop For each token
+        loop För varje token
             BR-->>LLM: token
             LLM-->>API: token
-            API-->>UI: SSE token
-            UI-->>User: Render incrementally
+            API-->>UI: SSE-token
+            UI-->>User: Rendera inkrementellt
         end
         API->>Repo: add_message(sub, id, assistant_msg)
-        Repo->>DDB: PutItem (full assistant message)
-        API-->>UI: SSE done
+        Repo->>DDB: PutItem (fullständigt assistentmeddelande)
+        API-->>UI: SSE klar
     end
 ```
 
-## 6. Core Flows (required capabilities)
+## 6. Kärnflöden (nödvändiga funktioner)
 
-| Requirement                | Endpoint                              | Behavior                                                                              |
+| Krav                       | Endpoint                              | Beteende                                                                              |
 | -------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------ |
-| Create a new conversation  | `POST /conversations`                 | Creates conversation owned by `sub`; stores chosen model.                             |
-| Send message + get answer  | `POST /conversations/{id}/messages`   | Persist user msg → load history → stream from Bedrock (SSE) → persist assistant msg.  |
-| Fetch previous messages    | `GET /conversations/{id}/messages`    | Ownership-checked partition query.                                                    |
-| List conversations         | `GET /conversations`                  | Query the user's partition.                                                           |
-| Persistent storage         | (all of the above)                    | User msg persisted before inference; full assistant reply persisted on stream end.   |
+| Skapa en ny konversation   | `POST /conversations`                 | Skapar konversation ägd av `sub`; lagrar vald modell.                                 |
+| Skicka meddelande + få svar | `POST /conversations/{id}/messages`   | Lagra användarmeddelande → ladda historik → strömma från Bedrock (SSE) → lagra assistentmeddelande. |
+| Hämta tidigare meddelanden | `GET /conversations/{id}/messages`    | Ägarkontrollerad partitionsfråga.                                                     |
+| Lista konversationer       | `GET /conversations`                  | Fråga användarens partition.                                                          |
+| Permanent lagring          | (allt ovanstående)                    | Användarmeddelande lagras före inferens; fullständigt assistentsvar lagras vid strömslut. |
 
-Partial-stream handling: if the client disconnects mid-stream, whatever was
-generated is still persisted so history stays consistent.
+Hantering av delvis ström: om klienten kopplar ner mitt i strömmen lagras det som
+hunnit genereras ändå, så att historiken förblir konsekvent.
 
-## 7. Security — risks & mitigations
+## 7. Säkerhet — risker & motåtgärder
 
-- **Cross-user data access (the named risk):** every record keyed by Cognito
-  `sub`; the owner is derived from the validated JWT, **never** from client
-  input. Repository methods take `owner_sub` as a mandatory argument, so the
-  ownership scope is unavoidable. Even a guessed `conversationId` only queries
-  the attacker's own partition and returns nothing.
-- **Authentication:** Cognito JWTs validated on every request (signature,
-  issuer, audience, expiry) at the ALB and in middleware.
-- **Model abuse / cost control:** server-side model allowlist; input length
-  limits; per-user rate limiting.
-- **Prompt injection:** model output treated as untrusted text (rendered, never
-  executed); system prompt isolated from user content.
-- **Secrets:** no long-lived LLM keys — Bedrock and DynamoDB accessed via IAM
-  roles; Cognito config in SSM / Secrets Manager.
-- **Transport / at rest:** HTTPS everywhere; DynamoDB encryption at rest (KMS);
-  least-privilege IAM (only its table and `bedrock:InvokeModel*`).
-- **Validation:** Pydantic schemas reject malformed payloads at the edge.
-- **PII / GDPR path:** retention policy plus per-user delete/export endpoints as
-  the compliance roadmap.
+- **Dataåtkomst mellan användare (den utpekade risken):** varje post nycklas på
+  Cognito-`sub`; ägaren härleds från den validerade JWT:n, **aldrig** från
+  klientindata. Repository-metoder tar `owner_sub` som ett obligatoriskt argument,
+  så ägarskapsomfånget är oundvikligt. Även ett gissat `conversationId` frågar bara
+  angriparens egen partition och returnerar ingenting.
+- **Autentisering:** Cognito-JWT:er valideras vid varje förfrågan (signatur,
+  utfärdare, mottagare, utgång) vid ALB:en och i middleware.
+- **Modellmissbruk / kostnadskontroll:** serverside-tillåtelselista för modeller;
+  längdbegränsningar för indata; per-användare-hastighetsbegränsning.
+- **Prompt injection:** modellutdata behandlas som obetrodd text (renderas, körs
+  aldrig); systemprompten är isolerad från användarinnehåll.
+- **Hemligheter:** inga långlivade LLM-nycklar — Bedrock och DynamoDB nås via
+  IAM-roller; Cognito-konfiguration i SSM / Secrets Manager.
+- **Transport / i vila:** HTTPS överallt; DynamoDB-kryptering i vila (KMS);
+  minsta-privilegium-IAM (endast dess tabell och `bedrock:InvokeModel*`).
+- **Validering:** Pydantic-scheman avvisar felaktiga payloads vid kanten.
+- **PII / GDPR-väg:** lagringspolicy plus per-användare-endpoints för
+  radering/export som efterlevnadsplan.
 
-## 8. Error Handling
+## 8. Felhantering
 
-- **Layered exceptions:** domain errors (`ConversationNotFound`, `NotOwner`)
-  mapped to HTTP codes (404 / 403) by a single handler; business logic never
-  builds HTTP responses.
-- **Upstream resilience:** Bedrock calls wrapped with timeouts and bounded
-  retries/backoff for throttling; a clear `503` if inference is unavailable —
-  the user's message is still persisted so nothing is lost.
-- **Consistent envelope:** `{ "error": { "code", "message" } }`; internal
-  details logged, never leaked to clients.
-- **Idempotency:** request-id / idempotency key on message sends to survive
-  retries.
+- **Lagerindelade undantag:** domänfel (`ConversationNotFound`, `NotOwner`) mappas
+  till HTTP-koder (404 / 403) av en enda hanterare; affärslogiken bygger aldrig
+  HTTP-svar.
+- **Motståndskraft uppströms:** Bedrock-anrop omslutna med timeouts och begränsade
+  omförsök/backoff för throttling; ett tydligt `503` om inferens är otillgänglig —
+  användarens meddelande lagras ändå så att inget går förlorat.
+- **Enhetligt format:** `{ "error": { "code", "message" } }`; interna detaljer
+  loggas, läcker aldrig till klienter.
+- **Idempotens:** request-id / idempotensnyckel vid meddelandeutskick för att klara
+  omförsök.
 
-## 9. SDLC / Operations
+## 9. SDLC / Drift
 
-- **Repo:** monorepo — `services/chat-api/`, `frontend/`, `infra/` (CDK), root
+- **Repo:** monorepo — `services/chat-api/`, `frontend/`, `infra/` (CDK), rotens
   `docker-compose.yml`.
-- **IaC:** **AWS CDK** provisions Cognito, DynamoDB, ALB/Fargate, IAM, S3 +
+- **IaC:** **AWS CDK** provisionerar Cognito, DynamoDB, ALB/Fargate, IAM, S3 +
   CloudFront.
-- **CI/CD:** GitHub Actions — ruff, mypy, pytest, build image, `cdk deploy`.
-- **Testing:** unit tests against the repository/provider *interfaces* with
-  fakes (no AWS), plus thin integration against DynamoDB Local.
-- **Observability:** structured logging, CloudWatch metrics/traces, propagated
-  request ids.
-- **Config:** 12-factor — env vars (table name, Cognito pool/client ids, region,
-  allowed model ids) validated at startup via a Pydantic `Settings` object.
+- **CI/CD:** GitHub Actions — ruff, mypy, pytest, bygg image, `cdk deploy`.
+- **Testning:** enhetstester mot repository-/provider-*gränssnitten* med fakes
+  (ingen AWS), plus tunn integration mot DynamoDB Local.
+- **Observerbarhet:** strukturerad loggning, CloudWatch-mätvärden/-spårningar,
+  vidarebefordrade request-id:n.
+- **Konfiguration:** 12-factor — miljövariabler (tabellnamn, Cognito pool/client-id:n,
+  region, tillåtna modell-id:n) validerade vid uppstart via ett Pydantic
+  `Settings`-objekt.
 
-## 10. Path to Commercial Use
+## 10. Väg till kommersiell användning
 
-- **LLMProvider interface** → multi-provider, model routing, fallback.
-- **Repository interface** → swap to Postgres + pgvector when search /
-  analytics / RAG arrive.
-- **Per-service Docker images** → split LLM orchestration out, add
-  billing/usage-metering, scale independently.
-- **Cognito groups/claims** → role-based authorization drops in without
-  re-architecting.
+- **LLMProvider-gränssnitt** → flera leverantörer, modellrouting, fallback.
+- **Repository-gränssnitt** → byt till Postgres + pgvector när sökning / analys /
+  RAG kommer.
+- **Docker-images per tjänst** → bryt ut LLM-orkestreringen, lägg till
+  fakturering/användningsmätning, skala oberoende.
+- **Cognito-grupper/claims** → rollbaserad auktorisering läggs till utan att
+  återarkitektera.
