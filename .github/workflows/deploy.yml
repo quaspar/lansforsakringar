@@ -13,6 +13,14 @@ permissions:
   id-token: write
   contents: read
 
+# Ensure only one deploy runs at a time. Overlapping deploys can leave a
+# CloudFormation stack wedged in CREATE_IN_PROGRESS, which blocks all later
+# deploys. Queue subsequent runs instead of racing; don't cancel an in-flight
+# deploy mid-way (that's what leaves stacks stuck).
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
 env:
   AWS_REGION: us-east-1
 
