@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 interface AuthContextValue {
   token: string | null;
   sub: string | null;
+  email: string | null;
   login: () => void;
   logout: () => void;
   isLoading: boolean;
@@ -11,10 +12,22 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   token: null,
   sub: null,
+  email: null,
   login: () => {},
   logout: () => {},
   isLoading: true,
 });
+
+/** Best-effort read of the `email` claim from a Cognito id_token JWT. */
+function emailFromToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.email ?? payload["cognito:username"] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN ?? "";
 const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID ?? "";
@@ -90,7 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ token, sub, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{ token, sub, email: emailFromToken(token), login, logout, isLoading }}
+    >
       {children}
     </AuthContext.Provider>
   );
