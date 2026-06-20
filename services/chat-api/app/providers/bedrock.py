@@ -20,9 +20,7 @@ class BedrockProvider(LLMProvider):
     def _format_messages(self, messages: list[Message]) -> list[dict[str, object]]:
         # The Converse API uses a provider-agnostic message shape, so the same
         # code path works for Anthropic, Meta Llama and OpenAI models on Bedrock.
-        return [
-            {"role": m.role, "content": [{"text": m.content}]} for m in messages
-        ]
+        return [{"role": m.role, "content": [{"text": m.content}]} for m in messages]
 
     async def stream_completion(
         self, model: str, messages: list[Message]
@@ -53,4 +51,3 @@ class BedrockProvider(LLMProvider):
                 if attempt >= _MAX_RETRIES - 1:
                     raise InferenceUnavailable(str(exc)) from exc
                 await asyncio.sleep(_RETRY_BASE * (2**attempt))
-
