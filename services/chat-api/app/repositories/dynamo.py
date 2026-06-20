@@ -101,7 +101,12 @@ class DynamoDBRepository(ConversationRepository):
             resp = await table.query(
                 KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
                 & Key("SK").begins_with("CONV#"),
-                FilterExpression=~Attr("SK").contains("#MSG#"),
+                # begins_with("CONV#") also matches message items
+                # (SK = CONV#<id>#MSG#<id>), so exclude them. A FilterExpression
+                # may not reference primary-key attributes (PK/SK), so filter on
+                # a non-key attribute: message items have messageId, conversation
+                # items never do.
+                FilterExpression=Attr("messageId").not_exists(),
             )
         return [self._item_to_conversation(item) for item in resp.get("Items", [])]
 
