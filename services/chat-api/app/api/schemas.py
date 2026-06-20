@@ -28,3 +28,7 @@ class MessageResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1)
+    # Optional per-message model override. When set, this message is generated
+    # with this model instead of the conversation's stored model, letting the
+    # user switch models mid-conversation.
+    model: str | None = None

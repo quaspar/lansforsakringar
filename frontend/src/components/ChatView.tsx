@@ -76,7 +76,7 @@ export default function ChatView({
 
     let accumulated = "";
     try {
-      for await (const token of sendMessage(conversationId, trimmed)) {
+      for await (const token of sendMessage(conversationId, trimmed, model)) {
         accumulated += token;
         setStreamingContent(accumulated);
       }

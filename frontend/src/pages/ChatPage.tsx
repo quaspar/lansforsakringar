@@ -42,11 +42,17 @@ export default function ChatPage() {
   }
 
   const selectedConv = conversations.find((c) => c.id === selectedId);
-  const effectiveModel = selectedConv?.model ?? draftModel;
+  // The model picker (draftModel) is the source of truth for the model used on
+  // the next message — both for new conversations and for switching models
+  // mid-conversation. Selecting a conversation seeds the picker with the model
+  // it was created with.
+  const effectiveModel = draftModel;
   const showEmpty = composing || !selectedConv;
 
   function handleSelect(id: string) {
     setSelectedId(id);
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) setDraftModel(conv.model);
     setComposing(false);
     setPendingInitial(null);
     setModelOpen(false);
@@ -173,7 +179,7 @@ export default function ChatPage() {
           <ChatView
             key={selectedConv!.id}
             conversationId={selectedConv!.id}
-            model={selectedConv!.model}
+            model={effectiveModel}
             initialMessage={pendingInitial}
             onInitialConsumed={() => setPendingInitial(null)}
             onCountChange={onCountChange}

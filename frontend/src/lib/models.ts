@@ -12,21 +12,21 @@ export interface ModelOption {
 // which is why several providers can coexist here.
 export const MODELS: ModelOption[] = [
   {
-    id: "anthropic.claude-haiku-4-5-20251001-v1:0",
+    id: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     label: "Claude Haiku 4.5",
     description: "Snabb · vardagsfrågor",
     provider: "Anthropic",
     dot: "#d97757",
   },
   {
-    id: "anthropic.claude-sonnet-4-6",
+    id: "us.anthropic.claude-sonnet-4-6",
     label: "Claude Sonnet 4.6",
     description: "Stark på resonemang & text",
     provider: "Anthropic",
     dot: "#d97757",
   },
   {
-    id: "meta.llama3-3-70b-instruct-v1:0",
+    id: "us.meta.llama3-3-70b-instruct-v1:0",
     label: "Llama 3.3 70B",
     description: "Öppen modell · mångsidig",
     provider: "Meta",
