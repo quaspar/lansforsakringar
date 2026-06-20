@@ -15,7 +15,14 @@ export class NetworkStack extends cdk.Stack {
         `${this.region}a`,
         `${this.region}b`,
       ],
-      natGateways: 1,
+      natGateways: 0,
+      subnetConfiguration: [
+        {
+          name: "Public",
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+      ],
     });
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "ChatAlb", {
