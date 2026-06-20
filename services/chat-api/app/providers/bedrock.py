@@ -1,7 +1,5 @@
 import asyncio
-import json
 from collections.abc import AsyncIterator
-from typing import Any
 
 import aioboto3
 
@@ -11,6 +9,7 @@ from app.providers.base import LLMProvider
 
 _MAX_RETRIES = 3
 _RETRY_BASE = 1.0
+_MAX_TOKENS = 4096
 
 
 class BedrockProvider(LLMProvider):
@@ -18,42 +17,33 @@ class BedrockProvider(LLMProvider):
         self._region = region
         self._session = aioboto3.Session()
 
-    def _build_request_body(
-        self, model: str, messages: list[Message]
-    ) -> dict[str, Any]:
-        formatted = [{"role": m.role, "content": m.content} for m in messages]
-        return {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
-            "messages": formatted,
-        }
+    def _format_messages(self, messages: list[Message]) -> list[dict[str, object]]:
+        # The Converse API uses a provider-agnostic message shape, so the same
+        # code path works for Anthropic, Meta Llama and OpenAI models on Bedrock.
+        return [{"role": m.role, "content": [{"text": m.content}]} for m in messages]
 
     async def stream_completion(
         self, model: str, messages: list[Message]
     ) -> AsyncIterator[str]:
-        body = self._build_request_body(model, messages)
+        formatted = self._format_messages(messages)
         for attempt in range(_MAX_RETRIES):
             try:
                 async with self._session.client(
                     "bedrock-runtime", region_name=self._region
                 ) as client:
-                    response = await client.invoke_model_with_response_stream(
+                    response = await client.converse_stream(
                         modelId=model,
-                        body=json.dumps(body),
-                        contentType="application/json",
-                        accept="application/json",
+                        messages=formatted,
+                        inferenceConfig={"maxTokens": _MAX_TOKENS},
                     )
-                    stream = response.get("body")
+                    stream = response.get("stream")
                     if stream is None:
                         raise InferenceUnavailable("empty response stream")
                     async for event in stream:
-                        chunk = event.get("chunk")
-                        if chunk:
-                            data = json.loads(chunk["bytes"])
-                            if data.get("type") == "content_block_delta":
-                                delta = data.get("delta", {})
-                                if delta.get("type") == "text_delta":
-                                    yield delta.get("text", "")
+                        delta = event.get("contentBlockDelta", {}).get("delta", {})
+                        text = delta.get("text")
+                        if text:
+                            yield text
                     return
             except InferenceUnavailable:
                 raise

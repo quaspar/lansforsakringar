@@ -8,22 +8,36 @@ export interface ModelOption {
 }
 
 // Only the models the backend actually allows (see services/chat-api config.py
-// `allowed_models`). The prototype showed several providers, but the backend
-// only supports Bedrock Anthropic models today.
+// `allowed_models`). All are served through Amazon Bedrock via the Converse API,
+// which is why several providers can coexist here.
 export const MODELS: ModelOption[] = [
   {
-    id: "anthropic.claude-3-haiku-20240307-v1:0",
-    label: "Claude 3 Haiku",
+    id: "anthropic.claude-haiku-4-5-20251001-v1:0",
+    label: "Claude Haiku 4.5",
     description: "Snabb · vardagsfrågor",
     provider: "Anthropic",
     dot: "#d97757",
   },
   {
-    id: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    label: "Claude 3.5 Sonnet",
+    id: "anthropic.claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
     description: "Stark på resonemang & text",
     provider: "Anthropic",
     dot: "#d97757",
+  },
+  {
+    id: "meta.llama3-3-70b-instruct-v1:0",
+    label: "Llama 3.3 70B",
+    description: "Öppen modell · mångsidig",
+    provider: "Meta",
+    dot: "#4267b2",
+  },
+  {
+    id: "openai.gpt-oss-120b-1:0",
+    label: "GPT-oss 120B",
+    description: "Öppen modell · bred kunskap",
+    provider: "OpenAI",
+    dot: "#10a37f",
   },
 ];
 

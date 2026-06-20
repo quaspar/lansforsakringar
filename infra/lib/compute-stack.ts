@@ -34,9 +34,19 @@ export class ComputeStack extends cdk.Stack {
     taskRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-        resources: props.allowedModels.map(
-          (m) => `arn:aws:bedrock:${this.region}::foundation-model/${m}`
-        ),
+        // Newer models (Claude 4.x, Llama 3.3, GPT-oss) are served through
+        // cross-region inference profiles rather than single-region on-demand
+        // throughput. The role therefore needs invoke rights on the account's
+        // inference profiles plus the foundation-models those profiles route to
+        // (which can live in sibling regions), in addition to the in-region
+        // foundation-model ARNs for models that do support direct invocation.
+        resources: [
+          ...props.allowedModels.map(
+            (m) => `arn:aws:bedrock:${this.region}::foundation-model/${m}`
+          ),
+          `arn:aws:bedrock:*::foundation-model/*`,
+          `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+        ],
       })
     );
 
