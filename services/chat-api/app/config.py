@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     cognito_region: str = "us-east-1"
     allowed_models: list[str] = [
         "anthropic.claude-haiku-4-5-20251001-v1:0",
-        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "anthropic.claude-sonnet-4-6",
+        "meta.llama3-3-70b-instruct-v1:0",
+        "openai.gpt-oss-120b-1:0",
     ]
     repository: Literal["memory", "dynamo"] = "memory"
     provider: Literal["fake", "bedrock"] = "fake"
