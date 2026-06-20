@@ -84,15 +84,15 @@ export class ComputeStack extends cdk.Stack {
 
     // Scale to 0 during off-hours to save cost (times in UTC)
     const scaling = service.autoScaleTaskCount({ minCapacity: 0, maxCapacity: 1 });
-    // 22:00 Stockholm summer (CEST) / 21:00 Stockholm winter (CET)
+    // 23:00 Stockholm summer (CEST) / 22:00 Stockholm winter (CET)
     scaling.scaleOnSchedule("ScaleDownAtNight", {
-      schedule: appscaling.Schedule.cron({ hour: "20", minute: "0" }),
+      schedule: appscaling.Schedule.cron({ hour: "21", minute: "0" }),
       minCapacity: 0,
       maxCapacity: 0,
     });
-    // 08:00 Stockholm summer (CEST) / 07:00 Stockholm winter (CET)
+    // 07:00 Stockholm summer (CEST) / 06:00 Stockholm winter (CET)
     scaling.scaleOnSchedule("ScaleUpInMorning", {
-      schedule: appscaling.Schedule.cron({ hour: "6", minute: "0" }),
+      schedule: appscaling.Schedule.cron({ hour: "5", minute: "0" }),
       minCapacity: 1,
       maxCapacity: 1,
     });
