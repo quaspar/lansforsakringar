@@ -91,6 +91,41 @@ def test_send_message_streaming(client: TestClient) -> None:
     assert any("done" in chunk for chunk in chunks)
 
 
+def test_send_message_stream_error_event(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # When inference fails after the SSE stream has started, the endpoint emits
+    # a terminal `event: error` instead of a `done` event (and without bubbling
+    # an exception into the already-started response).
+    from app.domain.errors import InferenceUnavailable
+    from app.providers.fake import FakeProvider
+
+    async def boom(self, model, messages):  # type: ignore[no-untyped-def]
+        raise InferenceUnavailable("boom")
+        yield ""  # pragma: no cover — makes this an async generator
+
+    monkeypatch.setattr(FakeProvider, "stream_completion", boom)
+
+    resp = client.post(
+        "/conversations",
+        json={"title": "Chat", "model": MODEL},
+        headers={"X-Dev-Sub": "userA"},
+    )
+    conv_id = resp.json()["id"]
+
+    with client.stream(
+        "POST",
+        f"/conversations/{conv_id}/messages",
+        json={"content": "hello"},
+        headers={"X-Dev-Sub": "userA"},
+    ) as r:
+        assert r.status_code == 200
+        chunks = list(r.iter_lines())
+
+    assert any("event: error" in chunk for chunk in chunks)
+    assert not any("done" in chunk for chunk in chunks)
+
+
 def test_message_too_long(client: TestClient) -> None:
     settings = Settings(
         allowed_models=[MODEL],

@@ -104,10 +104,12 @@ export async function* sendMessage(
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        yield line.slice(6);
+      if (line.startsWith("event: error")) {
+        throw new Error("upstream_error");
       } else if (line.startsWith("event: done")) {
         return;
+      } else if (line.startsWith("data: ")) {
+        yield line.slice(6);
       }
     }
   }
