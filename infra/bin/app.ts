@@ -37,6 +37,7 @@ const frontendStack = new FrontendStack(app, "ChatFrontendStack", {
   apiEndpoint: computeStack.apiEndpoint,
   cognitoDomain: authStack.cognitoDomain,
   cognitoClientId: authStack.userPoolClient.userPoolClientId,
+  userPool: authStack.userPool,
 });
 frontendStack.addDependency(computeStack);
 frontendStack.addDependency(authStack);

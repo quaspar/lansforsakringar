@@ -1,4 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  cognitoClientId as CLIENT_ID,
+  cognitoDomain as COGNITO_DOMAIN,
+  isCognitoConfigured,
+} from "../config";
 
 interface AuthContextValue {
   token: string | null;
@@ -29,8 +34,6 @@ function emailFromToken(token: string | null): string | null {
   }
 }
 
-const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN ?? "";
-const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID ?? "";
 const REDIRECT_URI = window.location.origin + "/callback";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -82,7 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function login() {
-    if (!COGNITO_DOMAIN || !CLIENT_ID) return;
+    if (!isCognitoConfigured) {
+      console.error(
+        "Cognito is not configured: missing cognitoDomain / cognitoClientId. " +
+          "In production these come from /config.js (injected by the CDK " +
+          "FrontendStack); for local dev set VITE_COGNITO_DOMAIN and " +
+          "VITE_COGNITO_CLIENT_ID."
+      );
+      return;
+    }
     window.location.href =
       `${COGNITO_DOMAIN}/login?response_type=code` +
       `&client_id=${CLIENT_ID}` +
