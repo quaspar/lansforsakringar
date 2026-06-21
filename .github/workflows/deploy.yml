@@ -60,6 +60,17 @@ jobs:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
+      # Deploy ComputeStack first so it stops importing the private subnet IDs
+      # from NetworkStack before NetworkStack removes them. Without this,
+      # CloudFormation blocks the NetworkStack update because the live
+      # ComputeStack still holds a cross-stack import on those exports.
+      - name: CDK pre-deploy (ComputeStack)
+        working-directory: infra
+        run: npx cdk deploy ChatComputeStack --exclusively --require-approval never
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
       - name: CDK deploy
         working-directory: infra
         run: npx cdk deploy --all --require-approval never
