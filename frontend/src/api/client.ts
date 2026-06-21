@@ -101,15 +101,35 @@ export async function* sendMessage(
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.startsWith("event: error")) {
+
+    // SSE events are separated by a blank line. Parse whole events only;
+    // a token may span multiple `data:` lines (one per embedded newline),
+    // which must be rejoined with "\n" to reconstruct the original content.
+    let boundary: number;
+    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+
+      let eventName: string | null = null;
+      const dataLines: string[] = [];
+      for (const line of rawEvent.split("\n")) {
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          // Strip "data:" and the single optional leading space (SSE convention).
+          const v = line.slice(5);
+          dataLines.push(v.startsWith(" ") ? v.slice(1) : v);
+        }
+      }
+
+      if (eventName === "error") {
         throw new Error("upstream_error");
-      } else if (line.startsWith("event: done")) {
+      }
+      if (eventName === "done") {
         return;
-      } else if (line.startsWith("data: ")) {
-        yield line.slice(6);
+      }
+      if (dataLines.length > 0) {
+        yield dataLines.join("\n");
       }
     }
   }

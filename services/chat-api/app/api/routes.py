@@ -93,7 +93,13 @@ def make_router(
             # into Starlette (which would raise "response already started").
             try:
                 async for token in stream:
-                    yield f"data: {token}\n\n".encode()
+                    # SSE forbids raw newlines inside a `data:` value: a blank
+                    # line terminates the event, so a token like "a\n\nb" would
+                    # be framed as `data: a` followed by bare lines the client
+                    # drops. Emit one `data:` field per line; the client rejoins
+                    # them with "\n" to reconstruct the original token.
+                    payload = "".join(f"data: {line}\n" for line in token.split("\n"))
+                    yield f"{payload}\n".encode()
             except InferenceUnavailable as exc:
                 logger.warning("inference failed mid-stream: %s", exc)
                 yield b"event: error\ndata: upstream_error\n\n"
