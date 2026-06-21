@@ -91,6 +91,48 @@ def test_send_message_streaming(client: TestClient) -> None:
     assert any("done" in chunk for chunk in chunks)
 
 
+def test_send_message_stream_preserves_newlines_in_tokens(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A token containing newlines must not break SSE framing: each line is sent
+    # as its own `data:` field so an embedded newline can't terminate the event
+    # early and drop the rest of the token.
+    from app.providers.fake import FakeProvider
+
+    async def streamy(self, model, messages):  # type: ignore[no-untyped-def]
+        yield "# Title\n\nbody"
+
+    monkeypatch.setattr(FakeProvider, "stream_completion", streamy)
+
+    resp = client.post(
+        "/conversations",
+        json={"title": "Chat", "model": MODEL},
+        headers={"X-Dev-Sub": "userA"},
+    )
+    conv_id = resp.json()["id"]
+
+    with client.stream(
+        "POST",
+        f"/conversations/{conv_id}/messages",
+        json={"content": "hello"},
+        headers={"X-Dev-Sub": "userA"},
+    ) as r:
+        assert r.status_code == 200
+        body = r.read().decode()
+
+    # Every content line is its own `data:` field; no bare (prefix-less) lines.
+    content_event = body.split("event: done")[0]
+    for line in content_event.splitlines():
+        assert line == "" or line.startswith("data:"), line
+    # Rejoining the data fields reconstructs the original token verbatim.
+    data_values = [
+        line[len("data: ") :] if line.startswith("data: ") else line[len("data:") :]
+        for line in content_event.splitlines()
+        if line.startswith("data:")
+    ]
+    assert "\n".join(data_values) == "# Title\n\nbody"
+
+
 def test_send_message_stream_error_event(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
