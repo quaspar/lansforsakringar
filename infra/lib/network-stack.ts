@@ -16,6 +16,14 @@ export class NetworkStack extends cdk.Stack {
         `${this.region}b`,
       ],
       natGateways: 0,
+      subnetConfiguration: [
+        { name: "Public", subnetType: ec2.SubnetType.PUBLIC },
+        // Keep the name "Private" so CDK generates the same logical IDs as
+        // the existing PRIVATE_WITH_EGRESS subnets. Only the route tables
+        // change (NAT route removed); the subnet resources are unchanged,
+        // which avoids breaking the cross-stack exports ComputeStack imports.
+        { name: "Private", subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      ],
     });
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "ChatAlb", {
