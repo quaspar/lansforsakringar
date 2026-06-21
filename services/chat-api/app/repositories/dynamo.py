@@ -12,9 +12,12 @@ _R = "dynamodb"
 
 
 class DynamoDBRepository(ConversationRepository):
-    def __init__(self, table_name: str, region: str) -> None:
+    def __init__(
+        self, table_name: str, region: str, endpoint_url: str | None = None
+    ) -> None:
         self._table_name = table_name
         self._region = region
+        self._endpoint_url = endpoint_url
         self._session = aioboto3.Session()
         self._stack: AsyncExitStack | None = None
         self._table: Any = None
@@ -55,8 +58,30 @@ class DynamoDBRepository(ConversationRepository):
 
     async def startup(self) -> None:
         self._stack = AsyncExitStack()
+        kwargs: dict[str, Any] = {"region_name": self._region}
+        if self._endpoint_url:
+            kwargs["endpoint_url"] = self._endpoint_url
+
+        if self._endpoint_url:
+            async with self._session.client(_R, **kwargs) as client:
+                try:
+                    await client.create_table(
+                        TableName=self._table_name,
+                        KeySchema=[
+                            {"AttributeName": "PK", "KeyType": "HASH"},
+                            {"AttributeName": "SK", "KeyType": "RANGE"},
+                        ],
+                        AttributeDefinitions=[
+                            {"AttributeName": "PK", "AttributeType": "S"},
+                            {"AttributeName": "SK", "AttributeType": "S"},
+                        ],
+                        BillingMode="PAY_PER_REQUEST",
+                    )
+                except client.exceptions.ResourceInUseException:
+                    pass
+
         dynamo = await self._stack.enter_async_context(
-            self._session.resource(_R, region_name=self._region)
+            self._session.resource(_R, **kwargs)
         )
         self._table = await dynamo.Table(self._table_name)
 

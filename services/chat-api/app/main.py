@@ -48,6 +48,7 @@ def _build_repository(settings: Settings) -> ConversationRepository:
             return DynamoDBRepository(
                 table_name=settings.dynamo_table_name,
                 region=settings.aws_region,
+                endpoint_url=settings.dynamo_endpoint or None,
             )
         case "memory":
             from app.repositories.memory import InMemoryRepository
