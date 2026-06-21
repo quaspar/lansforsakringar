@@ -4,6 +4,12 @@ from app.domain.models import Conversation, Message
 
 
 class ConversationRepository(ABC):
+    async def startup(self) -> None:
+        """Open any long-lived resources. No-op by default."""
+
+    async def aclose(self) -> None:
+        """Release any long-lived resources. No-op by default."""
+
     @abstractmethod
     async def create_conversation(
         self, owner_sub: str, title: str, model: str

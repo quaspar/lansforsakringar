@@ -25,21 +25,10 @@ MODEL = "test-model"
 
 
 @pytest.fixture
-def repo() -> DynamoDBRepository:
-
+async def repo() -> DynamoDBRepository:
     import aioboto3
 
     endpoint = os.getenv("DYNAMO_ENDPOINT", "http://localhost:8000")
-
-    async def _patch_session(r: DynamoDBRepository) -> None:
-        import aioboto3
-
-        session = aioboto3.Session()
-        r._session = session
-        r._endpoint = endpoint
-
-    r = DynamoDBRepository(table_name=TABLE, region=REGION)
-    r._endpoint = endpoint  # type: ignore[attr-defined]
     original_resource = aioboto3.Session.resource
 
     def patched_resource(self, service, **kwargs):  # type: ignore[no-untyped-def]
@@ -48,11 +37,14 @@ def repo() -> DynamoDBRepository:
         kwargs.setdefault("aws_secret_access_key", "dummy")
         return original_resource(self, service, **kwargs)
 
-    import aioboto3
-
     aioboto3.Session.resource = patched_resource  # type: ignore[method-assign]
-    yield r
-    aioboto3.Session.resource = original_resource  # type: ignore[method-assign]
+    r = DynamoDBRepository(table_name=TABLE, region=REGION)
+    await r.startup()
+    try:
+        yield r
+    finally:
+        await r.aclose()
+        aioboto3.Session.resource = original_resource  # type: ignore[method-assign]
 
 
 async def test_create_and_get(repo: DynamoDBRepository) -> None:

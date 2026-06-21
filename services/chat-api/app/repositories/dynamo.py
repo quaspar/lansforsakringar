@@ -1,3 +1,4 @@
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ class DynamoDBRepository(ConversationRepository):
         self._table_name = table_name
         self._region = region
         self._session = aioboto3.Session()
+        self._stack: AsyncExitStack | None = None
+        self._table: Any = None
 
     def _pk(self, owner_sub: str) -> str:
         return f"USER#{owner_sub}"
@@ -45,14 +48,28 @@ class DynamoDBRepository(ConversationRepository):
             created_at=datetime.fromisoformat(item["createdAt"]),
         )
 
-    def _resource(self) -> Any:
-        return self._session.resource(_R, region_name=self._region)
+    def _require_table(self) -> Any:
+        if self._table is None:
+            raise RuntimeError("DynamoDBRepository.startup() was not awaited")
+        return self._table
+
+    async def startup(self) -> None:
+        self._stack = AsyncExitStack()
+        dynamo = await self._stack.enter_async_context(
+            self._session.resource(_R, region_name=self._region)
+        )
+        self._table = await dynamo.Table(self._table_name)
+
+    async def aclose(self) -> None:
+        if self._stack is not None:
+            await self._stack.aclose()
 
     async def create_conversation(
         self, owner_sub: str, title: str, model: str
     ) -> Conversation:
         from ulid import ULID
 
+        table = self._require_table()
         now = datetime.now(UTC)
         conv_id = str(ULID())
         item = {
@@ -65,9 +82,7 @@ class DynamoDBRepository(ConversationRepository):
             "createdAt": now.isoformat(),
             "updatedAt": now.isoformat(),
         }
-        async with self._resource() as dynamo:
-            table = await dynamo.Table(self._table_name)
-            await table.put_item(Item=item)
+        await table.put_item(Item=item)
         return Conversation(
             id=conv_id,
             owner_sub=owner_sub,
@@ -80,14 +95,13 @@ class DynamoDBRepository(ConversationRepository):
     async def get_conversation(
         self, owner_sub: str, conversation_id: str
     ) -> Conversation:
-        async with self._resource() as dynamo:
-            table = await dynamo.Table(self._table_name)
-            resp = await table.get_item(
-                Key={
-                    "PK": self._pk(owner_sub),
-                    "SK": self._conv_sk(conversation_id),
-                }
-            )
+        table = self._require_table()
+        resp = await table.get_item(
+            Key={
+                "PK": self._pk(owner_sub),
+                "SK": self._conv_sk(conversation_id),
+            }
+        )
         item = resp.get("Item")
         if item is None:
             raise ConversationNotFound(conversation_id)
@@ -96,24 +110,24 @@ class DynamoDBRepository(ConversationRepository):
     async def list_conversations(self, owner_sub: str) -> list[Conversation]:
         from boto3.dynamodb.conditions import Attr, Key
 
-        async with self._resource() as dynamo:
-            table = await dynamo.Table(self._table_name)
-            resp = await table.query(
-                KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
-                & Key("SK").begins_with("CONV#"),
-                # begins_with("CONV#") also matches message items
-                # (SK = CONV#<id>#MSG#<id>), so exclude them. A FilterExpression
-                # may not reference primary-key attributes (PK/SK), so filter on
-                # a non-key attribute: message items have messageId, conversation
-                # items never do.
-                FilterExpression=Attr("messageId").not_exists(),
-            )
+        table = self._require_table()
+        resp = await table.query(
+            KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
+            & Key("SK").begins_with("CONV#"),
+            # begins_with("CONV#") also matches message items
+            # (SK = CONV#<id>#MSG#<id>), so exclude them. A FilterExpression
+            # may not reference primary-key attributes (PK/SK), so filter on
+            # a non-key attribute: message items have messageId, conversation
+            # items never do.
+            FilterExpression=Attr("messageId").not_exists(),
+        )
         return [self._item_to_conversation(item) for item in resp.get("Items", [])]
 
     async def add_message(
         self, owner_sub: str, conversation_id: str, message: Message
     ) -> Message:
         await self.get_conversation(owner_sub, conversation_id)
+        table = self._require_table()
         now = datetime.now(UTC)
         item: dict[str, Any] = {
             "PK": self._pk(owner_sub),
@@ -129,17 +143,15 @@ class DynamoDBRepository(ConversationRepository):
         if message.tokens is not None:
             item["tokens"] = message.tokens
 
-        async with self._resource() as dynamo:
-            table = await dynamo.Table(self._table_name)
-            await table.put_item(Item=item)
-            await table.update_item(
-                Key={
-                    "PK": self._pk(owner_sub),
-                    "SK": self._conv_sk(conversation_id),
-                },
-                UpdateExpression="SET updatedAt = :ts",
-                ExpressionAttributeValues={":ts": now.isoformat()},
-            )
+        await table.put_item(Item=item)
+        await table.update_item(
+            Key={
+                "PK": self._pk(owner_sub),
+                "SK": self._conv_sk(conversation_id),
+            },
+            UpdateExpression="SET updatedAt = :ts",
+            ExpressionAttributeValues={":ts": now.isoformat()},
+        )
         return message
 
     async def list_messages(
@@ -148,10 +160,9 @@ class DynamoDBRepository(ConversationRepository):
         await self.get_conversation(owner_sub, conversation_id)
         from boto3.dynamodb.conditions import Key
 
-        async with self._resource() as dynamo:
-            table = await dynamo.Table(self._table_name)
-            resp = await table.query(
-                KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
-                & Key("SK").begins_with(f"CONV#{conversation_id}#MSG#"),
-            )
+        table = self._require_table()
+        resp = await table.query(
+            KeyConditionExpression=Key("PK").eq(self._pk(owner_sub))
+            & Key("SK").begins_with(f"CONV#{conversation_id}#MSG#"),
+        )
         return [self._item_to_message(item) for item in resp.get("Items", [])]
