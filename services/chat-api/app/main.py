@@ -3,7 +3,6 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.auth import make_auth_dependency
 from app.api.errors import (
     conversation_not_found_handler,
     inference_unavailable_handler,
@@ -11,7 +10,7 @@ from app.api.errors import (
     not_owner_handler,
     unhandled_exception_handler,
 )
-from app.api.routes import make_router
+from app.api.routes import router
 from app.config import Settings
 from app.domain.errors import (
     ConversationNotFound,
@@ -20,30 +19,43 @@ from app.domain.errors import (
     NotOwner,
 )
 from app.providers.base import LLMProvider
-from app.providers.bedrock import BedrockProvider
-from app.providers.fake import FakeProvider
 from app.repositories.base import ConversationRepository
-from app.repositories.memory import InMemoryRepository
-from app.services.chat_service import ChatService
 
 logging.basicConfig(level=logging.INFO)
 
 
-def _make_repository(settings: Settings) -> ConversationRepository:
-    if settings.repository == "dynamo":
-        from app.repositories.dynamo import DynamoDBRepository
+def _build_repository(settings: Settings) -> ConversationRepository:
+    # Imports are per-branch so a production process only ever loads the
+    # backend it actually uses, and an unrecognised value fails closed
+    # rather than silently falling back to the in-memory store.
+    match settings.repository:
+        case "dynamo":
+            from app.repositories.dynamo import DynamoDBRepository
 
-        return DynamoDBRepository(
-            table_name=settings.dynamo_table_name,
-            region=settings.aws_region,
-        )
-    return InMemoryRepository()
+            return DynamoDBRepository(
+                table_name=settings.dynamo_table_name,
+                region=settings.aws_region,
+            )
+        case "memory":
+            from app.repositories.memory import InMemoryRepository
+
+            return InMemoryRepository()
+        case other:
+            raise ValueError(f"Unknown repository backend: {other!r}")
 
 
-def _make_provider(settings: Settings) -> LLMProvider:
-    if settings.provider == "bedrock":
-        return BedrockProvider(region=settings.aws_region)
-    return FakeProvider()
+def _build_provider(settings: Settings) -> LLMProvider:
+    match settings.provider:
+        case "bedrock":
+            from app.providers.bedrock import BedrockProvider
+
+            return BedrockProvider(region=settings.aws_region)
+        case "fake":
+            from app.providers.fake import FakeProvider
+
+            return FakeProvider()
+        case other:
+            raise ValueError(f"Unknown provider: {other!r}")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -60,12 +72,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    repo = _make_repository(settings)
-    provider = _make_provider(settings)
-    service = ChatService(repo, provider, set(settings.allowed_models))
-    get_current_user = make_auth_dependency(settings)
+    # App-scoped singletons read back by the dependency layer (app/api/deps.py)
+    # via request.app.state. Tests bypass this wiring entirely by registering
+    # app.dependency_overrides for get_repository / get_provider / etc.
+    app.state.settings = settings
+    app.state.repository = _build_repository(settings)
+    app.state.provider = _build_provider(settings)
 
-    router = make_router(service, get_current_user, settings.max_message_chars)
     app.include_router(router)
 
     app.add_exception_handler(ConversationNotFound, conversation_not_found_handler)  # type: ignore[arg-type]
