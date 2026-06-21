@@ -131,7 +131,7 @@ export default function ChatPage() {
       {/* main */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* top bar */}
-        <div className="flex h-[62px] flex-none items-center justify-between border-b border-[#eceef1] bg-white/85 px-4 backdrop-blur sm:px-[22px]">
+        <div className="relative z-10 flex h-[62px] flex-none items-center justify-between border-b border-[#eceef1] bg-white/85 px-4 backdrop-blur sm:px-[22px]">
           <div className="flex min-w-0 items-center gap-3">
             {showMainToggle && (
               <button
