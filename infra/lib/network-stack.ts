@@ -31,6 +31,23 @@ export class NetworkStack extends cdk.Stack {
       internetFacing: true,
     });
 
+    // Transitional: preserve the private-subnet CloudFormation exports that
+    // the currently-deployed ComputeStack still imports via Fn::ImportValue.
+    // CDK stopped auto-generating these outputs once ComputeStack switched to
+    // public subnets, so CloudFormation would try to delete them — which it
+    // can't while the live stack still imports them.  Explicit outputs with
+    // the same logical IDs keep the exports alive through this deploy.
+    // Once this deploy completes (ComputeStack on public subnets), nothing
+    // imports these anymore and the next deploy can remove them cleanly.
+    new cdk.CfnOutput(this, "ExportsOutputRefChatVpcPrivateSubnet1Subnet72514D4CD14686E6", {
+      value: this.vpc.isolatedSubnets[0].subnetId,
+      exportName: `${this.stackName}:ExportsOutputRefChatVpcPrivateSubnet1Subnet72514D4CD14686E6`,
+    });
+    new cdk.CfnOutput(this, "ExportsOutputRefChatVpcPrivateSubnet2SubnetAF09A63C174901C7", {
+      value: this.vpc.isolatedSubnets[1].subnetId,
+      exportName: `${this.stackName}:ExportsOutputRefChatVpcPrivateSubnet2SubnetAF09A63C174901C7`,
+    });
+
     new cdk.CfnOutput(this, "AlbDns", {
       value: this.alb.loadBalancerDnsName,
     });
