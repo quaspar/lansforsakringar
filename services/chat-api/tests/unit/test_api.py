@@ -173,6 +173,15 @@ def test_send_message_stream_error_event(
     assert not any("done" in chunk for chunk in chunks)
 
 
+def test_lifespan_startup_and_shutdown() -> None:
+    with TestClient(
+        create_app(Settings(repository="memory", provider="fake", auth_mode="dev"))
+    ) as c:
+        resp = c.get("/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
 def test_message_too_long(client: TestClient) -> None:
     settings = Settings(
         allowed_models=[MODEL],
