@@ -3,6 +3,7 @@ import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as cr from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 
@@ -164,42 +165,77 @@ export class AuthStack extends cdk.Stack {
     // are set together here rather than split across two resources that would
     // clobber each other. ClientId "ALL" applies to every app client.
     //
-    // ImageFile is a binary blob; AwsCustomResource (AWS SDK v3) base64-decodes
-    // string values for blob-typed parameters, so the PNG is read at synth time
-    // and passed as a base64 string. The favicon is tiny (well under Cognito's
-    // 100 KB logo limit).
+    // This uses a dedicated Lambda rather than AwsCustomResource because
+    // ImageFile is a binary blob: the SDK base64-encodes the bytes once for the
+    // wire, so it must receive the *raw* image. AwsCustomResource only takes
+    // JSON-serialisable string parameters and passed the PNG through as a
+    // base64 string, which the SDK then encoded a second time — Cognito
+    // rejected the doubly-encoded payload with "The uploaded image must be a
+    // valid .jpeg or .png file." Here the handler decodes the base64 back to a
+    // Buffer so the image is encoded exactly once. The favicon is tiny (well
+    // under Cognito's 100 KB logo limit).
     const logoBase64 = fs
       .readFileSync(
         path.join(__dirname, "..", "..", "frontend", "public", "favicon.png")
       )
       .toString("base64");
 
-    const uiCustomization = new cr.AwsCustomResource(
+    const customizationFn = new lambda.Function(
+      this,
+      "HostedUiCustomizationFn",
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: "index.handler",
+        timeout: cdk.Duration.minutes(2),
+        // @aws-sdk/client-cognito-identity-provider ships with the Node.js 20
+        // Lambda runtime, so the handler can be inlined with no bundling.
+        code: lambda.Code.fromInline(
+          [
+            "const { CognitoIdentityProviderClient, SetUICustomizationCommand } =",
+            "  require('@aws-sdk/client-cognito-identity-provider');",
+            "exports.handler = async (event) => {",
+            "  const p = event.ResourceProperties;",
+            "  const PhysicalResourceId = 'hosted-ui-customization-' + p.UserPoolId;",
+            "  if (event.RequestType === 'Delete') return { PhysicalResourceId };",
+            "  const client = new CognitoIdentityProviderClient({});",
+            "  await client.send(new SetUICustomizationCommand({",
+            "    UserPoolId: p.UserPoolId,",
+            "    ClientId: p.ClientId,",
+            "    CSS: p.CSS,",
+            "    ImageFile: Buffer.from(p.ImageFile, 'base64'),",
+            "  }));",
+            "  return { PhysicalResourceId };",
+            "};",
+          ].join("\n")
+        ),
+      }
+    );
+    customizationFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["cognito-idp:SetUICustomization"],
+        resources: [this.userPool.userPoolArn],
+      })
+    );
+
+    const customizationProvider = new cr.Provider(
+      this,
+      "HostedUiCustomizationProvider",
+      { onEventHandler: customizationFn }
+    );
+
+    // Properties are passed to the handler verbatim; changing the CSS or the
+    // logo changes them, which triggers an update and re-applies the styling.
+    const uiCustomization = new cdk.CustomResource(
       this,
       "HostedUiCustomization",
       {
-        onUpdate: {
-          service: "CognitoIdentityServiceProvider",
-          action: "setUICustomization",
-          parameters: {
-            UserPoolId: this.userPool.userPoolId,
-            ClientId: "ALL",
-            CSS: HOSTED_UI_CSS,
-            ImageFile: logoBase64,
-          },
-          // Stable id; AwsCustomResource re-runs whenever the call parameters
-          // (CSS or image) change, so a new logo/CSS is always re-applied.
-          physicalResourceId: cr.PhysicalResourceId.of(
-            `hosted-ui-customization-${this.userPool.userPoolId}`
-          ),
+        serviceToken: customizationProvider.serviceToken,
+        properties: {
+          UserPoolId: this.userPool.userPoolId,
+          ClientId: "ALL",
+          CSS: HOSTED_UI_CSS,
+          ImageFile: logoBase64,
         },
-        policy: cr.AwsCustomResourcePolicy.fromStatements([
-          new iam.PolicyStatement({
-            actions: ["cognito-idp:SetUICustomization"],
-            resources: [this.userPool.userPoolArn],
-          }),
-        ]),
-        installLatestAwsSdk: false,
       }
     );
     // SetUICustomization requires the hosted UI domain to exist first.
