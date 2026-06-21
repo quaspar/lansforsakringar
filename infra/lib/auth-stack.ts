@@ -1,10 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
 import * as cdk from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as cr from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 
 // OAuth settings for the web client. These are the single source of truth:
@@ -38,10 +33,6 @@ const HOSTED_UI_CSS = `
 .banner-customizable {
   padding: 25px 0px 25px 0px;
   background-color: #eef0f3;
-}
-.logo-customizable {
-  max-width: 80%;
-  max-height: 30%;
 }
 .label-customizable {
   font-weight: 600;
@@ -156,89 +147,23 @@ export class AuthStack extends cdk.Stack {
     });
     this.cognitoDomain = `https://${domainPrefix}.auth.${this.region}.amazoncognito.com`;
 
-    // Style the Cognito Hosted UI to match the rest of the app: the brand CSS
-    // (see HOSTED_UI_CSS above) plus the app's logo (the same favicon the
-    // frontend serves). The L1 CfnUserPoolUICustomizationAttachment only
-    // supports CSS — to also set a logo we must call SetUICustomization, which
-    // takes the image bytes via ImageFile. SetUICustomization replaces the
-    // *entire* customization for the client in one call, so the CSS and image
-    // are set together here rather than split across two resources that would
-    // clobber each other. ClientId "ALL" applies to every app client.
+    // Style the Cognito Hosted UI to match the rest of the app with brand CSS
+    // (see HOSTED_UI_CSS above). "ALL" applies the customization to every app
+    // client of the pool. The attachment requires the hosted UI domain to exist
+    // first, so depend on it explicitly.
     //
-    // This uses a dedicated Lambda rather than AwsCustomResource because
-    // ImageFile is a binary blob: the SDK base64-encodes the bytes once for the
-    // wire, so it must receive the *raw* image. AwsCustomResource only takes
-    // JSON-serialisable string parameters and passed the PNG through as a
-    // base64 string, which the SDK then encoded a second time — Cognito
-    // rejected the doubly-encoded payload with "The uploaded image must be a
-    // valid .jpeg or .png file." Here the handler decodes the base64 back to a
-    // Buffer so the image is encoded exactly once. The favicon is tiny (well
-    // under Cognito's 100 KB logo limit).
-    const logoBase64 = fs
-      .readFileSync(
-        path.join(__dirname, "..", "..", "frontend", "public", "favicon.png")
-      )
-      .toString("base64");
-
-    const customizationFn = new lambda.Function(
-      this,
-      "HostedUiCustomizationFn",
-      {
-        runtime: lambda.Runtime.NODEJS_20_X,
-        handler: "index.handler",
-        timeout: cdk.Duration.minutes(2),
-        // @aws-sdk/client-cognito-identity-provider ships with the Node.js 20
-        // Lambda runtime, so the handler can be inlined with no bundling.
-        code: lambda.Code.fromInline(
-          [
-            "const { CognitoIdentityProviderClient, SetUICustomizationCommand } =",
-            "  require('@aws-sdk/client-cognito-identity-provider');",
-            "exports.handler = async (event) => {",
-            "  const p = event.ResourceProperties;",
-            "  const PhysicalResourceId = 'hosted-ui-customization-' + p.UserPoolId;",
-            "  if (event.RequestType === 'Delete') return { PhysicalResourceId };",
-            "  const client = new CognitoIdentityProviderClient({});",
-            "  await client.send(new SetUICustomizationCommand({",
-            "    UserPoolId: p.UserPoolId,",
-            "    ClientId: p.ClientId,",
-            "    CSS: p.CSS,",
-            "    ImageFile: Buffer.from(p.ImageFile, 'base64'),",
-            "  }));",
-            "  return { PhysicalResourceId };",
-            "};",
-          ].join("\n")
-        ),
-      }
-    );
-    customizationFn.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["cognito-idp:SetUICustomization"],
-        resources: [this.userPool.userPoolArn],
-      })
-    );
-
-    const customizationProvider = new cr.Provider(
-      this,
-      "HostedUiCustomizationProvider",
-      { onEventHandler: customizationFn }
-    );
-
-    // Properties are passed to the handler verbatim; changing the CSS or the
-    // logo changes them, which triggers an update and re-applies the styling.
-    const uiCustomization = new cdk.CustomResource(
+    // CSS only — no logo. Setting a logo needs the SetUICustomization API's
+    // ImageFile parameter, which this L1 resource doesn't expose; doing it via
+    // a custom resource wasn't worth the extra moving parts.
+    const uiCustomization = new cognito.CfnUserPoolUICustomizationAttachment(
       this,
       "HostedUiCustomization",
       {
-        serviceToken: customizationProvider.serviceToken,
-        properties: {
-          UserPoolId: this.userPool.userPoolId,
-          ClientId: "ALL",
-          CSS: HOSTED_UI_CSS,
-          ImageFile: logoBase64,
-        },
+        userPoolId: this.userPool.userPoolId,
+        clientId: "ALL",
+        css: HOSTED_UI_CSS,
       }
     );
-    // SetUICustomization requires the hosted UI domain to exist first.
     uiCustomization.node.addDependency(userPoolDomain);
 
     this.userPoolClient = this.userPool.addClient("ChatWebClient", {
