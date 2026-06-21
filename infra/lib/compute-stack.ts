@@ -50,6 +50,21 @@ export class ComputeStack extends cdk.Stack {
         ],
       })
     );
+    // Cross-region inference profiles verify the account's Marketplace
+    // subscription at call time. Without ViewSubscriptions the ConverseStream
+    // call returns AccessDeniedException even when model access is enabled in
+    // the Bedrock console. Subscribe is required alongside View to complete
+    // the check.
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "aws-marketplace:ViewSubscriptions",
+          "aws-marketplace:Subscribe",
+          "aws-marketplace:Unsubscribe",
+        ],
+        resources: ["*"],
+      })
+    );
 
     const logGroup = new logs.LogGroup(this, "ChatApiLogs", {
       retention: logs.RetentionDays.ONE_MONTH,
