@@ -65,7 +65,7 @@ export default function Composer({
       {showHints && (
         <div className="mt-2.5 flex items-center justify-between px-1.5">
           <span className="text-[11.5px] text-ink-faint">
-            Assistenten kan ha fel. Kontrollera viktig information.
+            LeiF kan ha fel. Kontrollera viktig information.
           </span>
           <span className="text-[11.5px] text-ink-faint">
             {modelLabel(model)} · Enter skickar

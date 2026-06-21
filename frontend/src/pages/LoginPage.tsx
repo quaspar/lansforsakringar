@@ -11,7 +11,7 @@ export default function LoginPage() {
         </div>
         <div className="text-center">
           <h1 className="text-[22px] font-extrabold tracking-[-.01em]">
-            Assistenten
+            LeiF
           </h1>
           <p className="mt-1 text-[13px] text-ink-muted">Försäkring &amp; bank</p>
         </div>

@@ -41,7 +41,7 @@ export default function ConversationList({
           </div>
           <div className="flex min-w-0 flex-col leading-[1.05]">
             <div className="text-[15px] font-bold tracking-[-.01em]">
-              Assistenten
+              LeiF
             </div>
             <div className="text-[11px] text-ink-muted">Försäkring &amp; bank</div>
           </div>
