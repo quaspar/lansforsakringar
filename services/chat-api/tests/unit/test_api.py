@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_provider
 from app.config import Settings
 from app.main import create_app
 
@@ -92,17 +93,19 @@ def test_send_message_streaming(client: TestClient) -> None:
 
 
 def test_send_message_stream_preserves_newlines_in_tokens(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
 ) -> None:
     # A token containing newlines must not break SSE framing: each line is sent
     # as its own `data:` field so an embedded newline can't terminate the event
     # early and drop the rest of the token.
-    from app.providers.fake import FakeProvider
+    from app.domain.models import Message
+    from app.providers.base import LLMProvider
 
-    async def streamy(self, model, messages):  # type: ignore[no-untyped-def]
-        yield "# Title\n\nbody"
+    class NewlineProvider(LLMProvider):
+        async def stream_completion(self, model: str, messages: list[Message]):  # type: ignore[no-untyped-def]
+            yield "# Title\n\nbody"
 
-    monkeypatch.setattr(FakeProvider, "stream_completion", streamy)
+    client.app.dependency_overrides[get_provider] = NewlineProvider
 
     resp = client.post(
         "/conversations",
@@ -134,19 +137,21 @@ def test_send_message_stream_preserves_newlines_in_tokens(
 
 
 def test_send_message_stream_error_event(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
 ) -> None:
     # When inference fails after the SSE stream has started, the endpoint emits
     # a terminal `event: error` instead of a `done` event (and without bubbling
     # an exception into the already-started response).
     from app.domain.errors import InferenceUnavailable
-    from app.providers.fake import FakeProvider
+    from app.domain.models import Message
+    from app.providers.base import LLMProvider
 
-    async def boom(self, model, messages):  # type: ignore[no-untyped-def]
-        raise InferenceUnavailable("boom")
-        yield ""  # pragma: no cover — makes this an async generator
+    class BoomProvider(LLMProvider):
+        async def stream_completion(self, model: str, messages: list[Message]):  # type: ignore[no-untyped-def]
+            raise InferenceUnavailable("boom")
+            yield ""  # pragma: no cover — makes this an async generator
 
-    monkeypatch.setattr(FakeProvider, "stream_completion", boom)
+    client.app.dependency_overrides[get_provider] = BoomProvider
 
     resp = client.post(
         "/conversations",

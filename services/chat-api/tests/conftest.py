@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_chat_service
 from app.config import Settings
 from app.main import create_app
 from app.providers.fake import FakeProvider
@@ -36,6 +37,10 @@ def service(
 
 
 @pytest.fixture
-def client(settings: Settings) -> TestClient:
+def client(settings: Settings, service: ChatService) -> TestClient:
+    # Inject the test's ChatService (and its repo/provider) straight into the
+    # app via FastAPI's override mechanism, so requests share the exact same
+    # instances the test can inspect — no production wiring runs.
     app = create_app(settings)
+    app.dependency_overrides[get_chat_service] = lambda: service
     return TestClient(app)
