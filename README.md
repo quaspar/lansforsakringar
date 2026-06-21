@@ -2,7 +2,7 @@
 
 En strömmad AI-chattjänst byggd för en rekryteringsuppgift. Användare skapar konversationer, skickar meddelanden och får svar strömmade token för token från AWS Bedrock. All historik lagras permanent i DynamoDB.
 
-Se [docs/architecture.md](docs/architecture.md) för designresonemang och [docs/implementation-plan.md](docs/implementation-plan.md) för byggplanen.
+Se [docs/architecture.md](docs/architecture.md) för designresonemang.
 
 ---
 

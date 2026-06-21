@@ -254,7 +254,7 @@ hunnit genereras ändå, så att historiken förblir konsekvent.
 - **Autentisering:** Cognito-JWT:er valideras vid varje förfrågan (signatur,
   utfärdare, mottagare, utgång) vid ALB:en och i middleware.
 - **Modellmissbruk / kostnadskontroll:** serverside-tillåtelselista för modeller;
-  längdbegränsningar för indata; per-användare-hastighetsbegränsning.
+  längdbegränsningar för indata.
 - **Prompt injection:** modellutdata behandlas som obetrodd text (renderas, körs
   aldrig); systemprompten är isolerad från användarinnehåll.
 - **Hemligheter:** inga långlivade LLM-nycklar — Bedrock och DynamoDB nås via
@@ -270,13 +270,12 @@ hunnit genereras ändå, så att historiken förblir konsekvent.
 - **Lagerindelade undantag:** domänfel (`ConversationNotFound`, `NotOwner`) mappas
   till HTTP-koder (404 / 403) av en enda hanterare; affärslogiken bygger aldrig
   HTTP-svar.
-- **Motståndskraft uppströms:** Bedrock-anrop omslutna med timeouts och begränsade
-  omförsök/backoff för throttling; ett tydligt `503` om inferens är otillgänglig —
-  användarens meddelande lagras ändå så att inget går förlorat.
+- **Motståndskraft uppströms:** Bedrock-anrop omslutna med begränsade
+  omförsök/backoff (3 försök, exponentiell fördröjning) för throttling; ett tydligt
+  `503` om inferens är otillgänglig — användarens meddelande lagras ändå så att
+  inget går förlorat.
 - **Enhetligt format:** `{ "error": { "code", "message" } }`; interna detaljer
   loggas, läcker aldrig till klienter.
-- **Idempotens:** request-id / idempotensnyckel vid meddelandeutskick för att klara
-  omförsök.
 
 ## 9. SDLC / Drift
 
@@ -284,7 +283,7 @@ hunnit genereras ändå, så att historiken förblir konsekvent.
   `docker-compose.yml`.
 - **IaC:** **AWS CDK** provisionerar Cognito, DynamoDB, ALB/Fargate, IAM, S3 +
   CloudFront.
-- **CI/CD:** GitHub Actions — ruff, mypy, pytest, bygg image, `cdk deploy`.
+- **CI/CD:** GitHub Actions — ruff, mypy, pytest, `cdk synth`.
 - **Testning:** enhetstester mot repository-/provider-*gränssnitten* med fakes
   (ingen AWS), plus tunn integration mot DynamoDB Local.
 - **Observerbarhet:** strukturerad loggning, CloudWatch-mätvärden/-spårningar,
