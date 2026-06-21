@@ -11,35 +11,27 @@ Se [docs/architecture.md](docs/architecture.md) för designresonemang och [docs/
 Förutsättningar: Docker, Docker Compose.
 
 ```bash
-# 1. Starta DynamoDB Local och API:et
-docker compose up chat-api dynamodb-local -d
+# Starta allt (DynamoDB Local, API, frontend) — tabellen skapas automatiskt
+docker compose up -d
+# Öppna http://localhost:5173
+```
 
-# 2. Skapa den lokala tabellen
-cd services/chat-api
-pip install -e ".[dev]"
-DYNAMO_ENDPOINT=http://localhost:8001 \
-AWS_ACCESS_KEY_ID=dummy \
-AWS_SECRET_ACCESS_KEY=dummy \
-python scripts/create_local_table.py
+API:et körs i dev-autentiseringsläge (ingen JWT behövs). Testa via curl:
 
-# 3. Testa API:et (dev-autentiseringsläge — ingen JWT behövs)
+```bash
 curl -s http://localhost:8000/health
 
 # Skapa en konversation
 curl -s -X POST http://localhost:8000/conversations \
   -H "Content-Type: application/json" \
   -H "X-Dev-Sub: alice" \
-  -d '{"title":"My Chat","model":"anthropic.claude-3-haiku-20240307-v1:0"}' | jq
+  -d '{"title":"My Chat","model":"us.anthropic.claude-haiku-4-5-20251001-v1:0"}' | jq
 
 # Strömma ett meddelande (ersätt <id> med konversationens id)
 curl -N -X POST http://localhost:8000/conversations/<id>/messages \
   -H "Content-Type: application/json" \
   -H "X-Dev-Sub: alice" \
   -d '{"content":"Hello!"}'
-
-# 4. Starta frontend
-docker compose up frontend -d
-# Öppna http://localhost:5173
 ```
 
 ### Röktest för isolering

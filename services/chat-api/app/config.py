@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     aws_region: str = "us-east-1"
     dynamo_table_name: str = "chat-service"
+    dynamo_endpoint: str = ""
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
     cognito_region: str = "us-east-1"
